@@ -7,7 +7,7 @@ Authors@R: person("Troy", "Hernandez", role = c("aut", "cre"),
 Description: A minimal R code formatter following base R style conventions.
     Formats R code with consistent spacing, indentation, and structure
     without tidyverse assumptions or pipeline aesthetics.
-License: MIT + file LICENSE
+License: GPL-3
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Suggests:
