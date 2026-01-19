@@ -335,9 +335,36 @@ reformat_one_function <- function(code) {
       has_brace <- TRUE
     }
 
+    # Check if there's a function body without braces (single expression body)
+    # This handles cases like: function(x, y) if (is.null(x)) y else x
+    has_inline_body <- FALSE
+    inline_body <- ""
+    if (!has_brace && close_idx + 1 <= nrow(terminals)) {
+      # There are tokens after ) that aren't { - this is an inline body
+      body_tokens <- terminals[terminals$line1 >= close_paren_line &
+                               seq_len(nrow(terminals)) > close_idx, ]
+      if (nrow(body_tokens) > 0) {
+        has_inline_body <- TRUE
+        # Get the original text from close_paren position to end of expression
+        # Find all lines that are part of this expression
+        body_end_line <- max(body_tokens$line1)
+        body_lines <- lines[close_paren_line:body_end_line]
+        # Get everything after the ) on the first line
+        first_body_line <- body_lines[1]
+        close_paren_col <- terminals$col2[close_idx]
+        inline_body <- substring(first_body_line, close_paren_col + 1)
+        if (length(body_lines) > 1) {
+          inline_body <- paste(c(inline_body, body_lines[-1]), collapse = "\n")
+        }
+        inline_body <- trimws(inline_body)
+      }
+    }
+
     # Add closing line
     if (has_brace) {
       new_lines <- c(new_lines, paste0(base_indent, ") {"))
+    } else if (has_inline_body) {
+      new_lines <- c(new_lines, paste0(base_indent, ") ", inline_body))
     } else {
       new_lines <- c(new_lines, paste0(base_indent, ")"))
     }
@@ -348,6 +375,13 @@ reformat_one_function <- function(code) {
       # { is on same line as )
     } else if (has_brace) {
       end_line <- terminals$line1[close_idx + 1]
+    } else if (has_inline_body) {
+      # Include all lines of the inline body
+      body_tokens <- terminals[terminals$line1 >= close_paren_line &
+                               seq_len(nrow(terminals)) > close_idx, ]
+      if (nrow(body_tokens) > 0) {
+        end_line <- max(body_tokens$line1)
+      }
     }
 
     # Replace the lines and return

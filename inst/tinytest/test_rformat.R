@@ -40,3 +40,11 @@ expect_error(
   rformat(123),
   "must be a character"
 )
+
+# Inline function body preservation (regression test)
+# Functions without braces should preserve their body
+result <- rformat("`%||%` <- function(x, y) if (is.null(x)) y else x")
+expect_true(
+  grepl("if \\(is\\.null\\(x\\)\\) y else x", result),
+  info = "Inline function body should be preserved"
+)
