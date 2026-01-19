@@ -87,7 +87,7 @@ format_tokens <- function(code) {
       }
 
       # Both braces and parens add indent
-      line_indent[ln] <- prev_brace + (if (prev_paren > 0) 1 else 0)
+      line_indent[ln] <- prev_brace + prev_paren
     }
   }
 

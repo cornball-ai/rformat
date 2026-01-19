@@ -48,3 +48,18 @@ expect_true(
   grepl("if \\(is\\.null\\(x\\)\\) y else x", result),
   info = "Inline function body should be preserved"
 )
+
+# Nested parentheses indentation (regression test)
+# Each level of parens should add one level of indent
+code <- "tryCatch(
+  foo(
+    x,
+    y
+  )
+)"
+result <- rformat(code)
+# x should be indented 4 spaces (2 for tryCatch, 2 for foo)
+expect_true(
+  grepl("\n    x,", result),
+  info = "Nested parens should increase indentation"
+)
