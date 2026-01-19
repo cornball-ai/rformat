@@ -1,0 +1,15 @@
+Package: rformat
+Type: Package
+Title: Base R Code Formatter
+Version: 0.1.0
+Authors@R: person("Troy", "Hernandez", role = c("aut", "cre"),
+                  email = "troy@cornball.ai")
+Description: A minimal R code formatter following base R style conventions.
+    Formats R code with consistent spacing, indentation, and structure
+    without tidyverse assumptions or pipeline aesthetics.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Suggests:
+    tinytest
+RoxygenNote: 7.0.0

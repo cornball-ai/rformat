@@ -1,0 +1,7 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.gitignore$
+^CLAUDE\.md$
+^man-md$
+^fyi\.md$

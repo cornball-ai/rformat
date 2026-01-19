@@ -1,0 +1,8 @@
+.Rhistory
+.Rdata
+.Ruserdata
+*.Rproj.user
+*.o
+*.so
+*.dll
+man-md/
