@@ -6,3 +6,4 @@
 *.so
 *.dll
 man-md/
+.Rproj.user
