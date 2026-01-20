@@ -732,7 +732,7 @@ needs_space <- function(
   }
 
   if (p == "')'") {
-    if (t %in% c("'['", "'[['", "'('")) {
+    if (t %in% c("'['", "'[['", "'('", "'$'", "'@'")) {
       return(FALSE)
     }
     return(TRUE)
