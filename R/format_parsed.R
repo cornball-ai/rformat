@@ -26,11 +26,11 @@ format_tokens <- function(code) {
   }
 
   # Get terminal tokens
-  terminals <- pd[pd$terminal, ]
-  terminals <- terminals[order(terminals$line1, terminals$col1), ]
+  terminals <- pd[pd$terminal,]
+  terminals <- terminals[order(terminals$line1, terminals$col1),]
 
   # Split original into lines for comment preservation
-  orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+  orig_lines <- strsplit(code, "\n", fixed = TRUE) [[1]]
 
   # Track nesting for indentation
   brace_depth <- 0
@@ -42,7 +42,7 @@ format_tokens <- function(code) {
   line_end_paren <- integer(max_line)
 
   for (i in seq_len(nrow(terminals))) {
-    tok <- terminals[i, ]
+    tok <- terminals[i,]
     ln <- tok$line1
 
     if (tok$token == "'{'") {
@@ -62,7 +62,7 @@ format_tokens <- function(code) {
   # Fill in gaps (comment/blank lines inherit from previous)
   for (ln in seq_len(max_line)) {
     if (ln > 1 && line_end_brace[ln] == 0 && line_end_paren[ln] == 0) {
-      if (nrow(terminals[terminals$line1 == ln, ]) == 0) {
+      if (nrow(terminals[terminals$line1 == ln,]) == 0) {
         line_end_brace[ln] <- line_end_brace[ln - 1]
         line_end_paren[ln] <- line_end_paren[ln - 1]
       }
@@ -78,7 +78,7 @@ format_tokens <- function(code) {
       prev_brace <- line_end_brace[ln - 1]
       prev_paren <- line_end_paren[ln - 1]
 
-      line_tokens <- terminals[terminals$line1 == ln, ]
+      line_tokens <- terminals[terminals$line1 == ln,]
       if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
         prev_brace <- max(0, prev_brace - 1)
       }
@@ -103,7 +103,7 @@ format_tokens <- function(code) {
       next
     }
 
-    line_tokens <- terminals[terminals$line1 == line_num, ]
+    line_tokens <- terminals[terminals$line1 == line_num,]
 
     if (nrow(line_tokens) == 0) {
       out_lines[line_num] <- line
@@ -114,7 +114,11 @@ format_tokens <- function(code) {
       if (grepl("^#'", trimws(line))) {
         out_lines[line_num] <- trimws(line)
       } else {
-        indent <- if (line_num <= max_line) line_indent[line_num] else 0
+        if (line_num <= max_line) {
+          indent <- line_indent[line_num]
+        } else {
+          indent <- 0
+        }
         out_lines[line_num] <- paste0(
           paste0(rep(indent_str, indent), collapse = ""),
           trimws(line)
@@ -123,7 +127,11 @@ format_tokens <- function(code) {
       next
     }
 
-    indent <- if (line_num <= max_line) line_indent[line_num] else 0
+    if (line_num <= max_line) {
+      indent <- line_indent[line_num]
+    } else {
+      indent <- 0
+    }
     formatted <- format_line_tokens(line_tokens)
 
     out_lines[line_num] <- paste0(
@@ -145,7 +153,6 @@ format_tokens <- function(code) {
 
   result
 }
-
 
 #' Reformat Function Definitions
 #'
@@ -178,7 +185,6 @@ reformat_function_defs <- function(code) {
   code
 }
 
-
 #' Reformat One Function Definition
 #'
 #' @param code Code string.
@@ -200,8 +206,8 @@ reformat_one_function <- function(code) {
     return(NULL)
   }
 
-  terminals <- pd[pd$terminal, ]
-  terminals <- terminals[order(terminals$line1, terminals$col1), ]
+  terminals <- pd[pd$terminal,]
+  terminals <- terminals[order(terminals$line1, terminals$col1),]
 
   func_indices <- which(terminals$token == "FUNCTION")
 
@@ -209,11 +215,11 @@ reformat_one_function <- function(code) {
     return(NULL)
   }
 
-  lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+  lines <- strsplit(code, "\n", fixed = TRUE) [[1]]
 
   # Find first function that needs reformatting
   for (fi in func_indices) {
-    func_tok <- terminals[fi, ]
+    func_tok <- terminals[fi,]
     func_line <- func_tok$line1
 
     # Find the opening ( after function
@@ -263,7 +269,11 @@ reformat_one_function <- function(code) {
       func_line_content,
       regexpr("^.*?(?=function)", func_line_content, perl = TRUE)
     )
-    prefix <- if (length(prefix_match) > 0) prefix_match else ""
+    if (length(prefix_match) > 0) {
+      prefix <- prefix_match
+    } else {
+      prefix <- ""
+    }
 
     # Build new function signature
     new_lines <- character(0)
@@ -277,7 +287,7 @@ reformat_one_function <- function(code) {
 
     i <- next_idx + 1
     while (i < close_idx) {
-      tok <- terminals[i, ]
+      tok <- terminals[i,]
 
       if (tok$token == "SYMBOL_FORMALS") {
         formal_name <- tok$text
@@ -293,7 +303,7 @@ reformat_one_function <- function(code) {
           value_paren_depth <- 0
 
           while (i < close_idx) {
-            vtok <- terminals[i, ]
+            vtok <- terminals[i,]
             if (vtok$token == "'('") value_paren_depth <- value_paren_depth + 1
             if (vtok$token == "')'") {
               if (value_paren_depth == 0) break
@@ -324,14 +334,18 @@ reformat_one_function <- function(code) {
 
     # Add each formal on its own line
     for (j in seq_along(formal_texts)) {
-      comma <- if (j < length(formal_texts)) "," else ""
+      if (j < length(formal_texts)) {
+        comma <- ","
+      } else {
+        comma <- ""
+      }
       new_lines <- c(new_lines, paste0(arg_indent, formal_texts[j], comma))
     }
 
     # Check if there's a { after the )
     has_brace <- FALSE
     if (close_idx + 1 <= nrow(terminals) &&
-        terminals$token[close_idx + 1] == "'{'") {
+      terminals$token[close_idx + 1] == "'{'") {
       has_brace <- TRUE
     }
 
@@ -342,7 +356,7 @@ reformat_one_function <- function(code) {
     if (!has_brace && close_idx + 1 <= nrow(terminals)) {
       # There are tokens after ) that aren't { - this is an inline body
       body_tokens <- terminals[terminals$line1 >= close_paren_line &
-                               seq_len(nrow(terminals)) > close_idx, ]
+      seq_len(nrow(terminals)) > close_idx,]
       if (nrow(body_tokens) > 0) {
         has_inline_body <- TRUE
         # Get the original text from close_paren position to end of expression
@@ -354,7 +368,7 @@ reformat_one_function <- function(code) {
         close_paren_col <- terminals$col2[close_idx]
         inline_body <- substring(first_body_line, close_paren_col + 1)
         if (length(body_lines) > 1) {
-          inline_body <- paste(c(inline_body, body_lines[-1]), collapse = "\n")
+          inline_body <- paste(c(inline_body, body_lines[- 1]), collapse = "\n")
         }
         inline_body <- trimws(inline_body)
       }
@@ -378,7 +392,7 @@ reformat_one_function <- function(code) {
     } else if (has_inline_body) {
       # Include all lines of the inline body
       body_tokens <- terminals[terminals$line1 >= close_paren_line &
-                               seq_len(nrow(terminals)) > close_idx, ]
+      seq_len(nrow(terminals)) > close_idx,]
       if (nrow(body_tokens) > 0) {
         end_line <- max(body_tokens$line1)
       }
@@ -402,7 +416,6 @@ reformat_one_function <- function(code) {
   # No function needed reformatting
   NULL
 }
-
 
 #' Reformat Inline If-Else Statements
 #'
@@ -437,7 +450,6 @@ reformat_inline_if <- function(code) {
   code
 }
 
-
 #' Reformat One Inline If-Else Statement
 #'
 #' @param code Code string.
@@ -459,16 +471,16 @@ reformat_one_inline_if <- function(code) {
     return(NULL)
   }
 
-  terminals <- pd[pd$terminal, ]
-  terminals <- terminals[order(terminals$line1, terminals$col1), ]
+  terminals <- pd[pd$terminal,]
+  terminals <- terminals[order(terminals$line1, terminals$col1),]
 
-  lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+  lines <- strsplit(code, "\n", fixed = TRUE) [[1]]
 
   # Find assignment followed by if on the same line
   assign_tokens <- c("LEFT_ASSIGN", "EQ_ASSIGN")
 
   for (i in seq_len(nrow(terminals))) {
-    tok <- terminals[i, ]
+    tok <- terminals[i,]
 
     if (!(tok$token %in% assign_tokens)) next
 
@@ -476,9 +488,9 @@ reformat_one_inline_if <- function(code) {
 
     # Find IF token after assignment on same line
     if_idx <- NULL
-    for (j in (i + 1):nrow(terminals)) {
+    for (j in (i + 1) :nrow(terminals)) {
       if (j > nrow(terminals)) break
-      next_tok <- terminals[j, ]
+      next_tok <- terminals[j,]
       if (next_tok$line1 != assign_line) break
       if (next_tok$token == "IF") {
         if_idx <- j
@@ -493,7 +505,7 @@ reformat_one_inline_if <- function(code) {
 
     # Get the variable being assigned (tokens before assignment)
     var_tokens <- terminals[terminals$line1 == assign_line &
-                            seq_len(nrow(terminals)) < i, ]
+    seq_len(nrow(terminals)) < i,]
     if (nrow(var_tokens) == 0) next
 
     var_name <- paste(var_tokens$text, collapse = "")
@@ -518,7 +530,7 @@ reformat_one_inline_if <- function(code) {
     if (close_paren_idx > nrow(terminals)) next
 
     # Extract condition tokens
-    cond_tokens <- terminals[(open_paren_idx + 1):(close_paren_idx - 1), ]
+    cond_tokens <- terminals[(open_paren_idx + 1) :(close_paren_idx - 1),]
     cond_text <- format_line_tokens(cond_tokens)
 
     # Find ELSE token
@@ -528,7 +540,7 @@ reformat_one_inline_if <- function(code) {
     nest_depth <- 0
 
     while (search_idx <= nrow(terminals)) {
-      stok <- terminals[search_idx, ]
+      stok <- terminals[search_idx,]
 
       if (stok$token == "IF") {
         nest_depth <- nest_depth + 1
@@ -550,7 +562,7 @@ reformat_one_inline_if <- function(code) {
     if (else_line != assign_line) next
 
     # Extract true expression (between close_paren and else)
-    true_tokens <- terminals[(close_paren_idx + 1):(else_idx - 1), ]
+    true_tokens <- terminals[(close_paren_idx + 1) :(else_idx - 1),]
     true_text <- format_line_tokens(true_tokens)
 
     # Extract false expression (after else to end of statement)
@@ -564,7 +576,7 @@ reformat_one_inline_if <- function(code) {
     false_brace_depth <- 0
 
     while (false_end <= nrow(terminals)) {
-      ftok <- terminals[false_end, ]
+      ftok <- terminals[false_end,]
 
       # Track nesting
       prev_paren_depth <- false_paren_depth
@@ -592,9 +604,17 @@ reformat_one_inline_if <- function(code) {
     }
 
     # Determine line ranges for true and false expressions
-    true_end_line <- if (nrow(true_tokens) > 0) max(true_tokens$line1) else assign_line
-    false_tokens <- terminals[false_start:false_end, ]
-    false_end_line <- if (nrow(false_tokens) > 0) max(false_tokens$line1) else assign_line
+    if (nrow(true_tokens) > 0) {
+      true_end_line <- max(true_tokens$line1)
+    } else {
+      true_end_line <- assign_line
+    }
+    false_tokens <- terminals[false_start:false_end,]
+    if (nrow(false_tokens) > 0) {
+      false_end_line <- max(false_tokens$line1)
+    } else {
+      false_end_line <- assign_line
+    }
 
     # Get base indent from current line
     current_line <- lines[assign_line]
@@ -633,7 +653,7 @@ reformat_one_inline_if <- function(code) {
     new_code_lines <- c(
       if (assign_line > 1) lines[1:(assign_line - 1)] else character(0),
       new_lines,
-      if (end_line < length(lines)) lines[(end_line + 1):length(lines)] else character(0)
+      if (end_line < length(lines)) lines[(end_line + 1) :length(lines)] else character(0)
     )
 
     result <- paste(new_code_lines, collapse = "\n")
@@ -647,7 +667,6 @@ reformat_one_inline_if <- function(code) {
   NULL
 }
 
-
 #' Format Tokens on a Single Line
 #'
 #' @param tokens Data frame of tokens for one line.
@@ -659,12 +678,12 @@ format_line_tokens <- function(tokens) {
     return("")
   }
 
-  tokens <- tokens[order(tokens$line1, tokens$col1), ]
+  tokens <- tokens[order(tokens$line1, tokens$col1),]
   parts <- character(nrow(tokens))
   prev <- NULL
 
   for (i in seq_len(nrow(tokens))) {
-    tok <- tokens[i, ]
+    tok <- tokens[i,]
 
     if (!is.null(prev)) {
       if (needs_space(prev, tok)) {
@@ -682,14 +701,16 @@ format_line_tokens <- function(tokens) {
   paste(parts, collapse = "")
 }
 
-
 #' Determine If Space Needed Between Tokens
 #'
 #' @param prev Previous token (data frame row).
 #' @param tok Current token (data frame row).
 #' @return Logical.
 #' @keywords internal
-needs_space <- function(prev, tok) {
+needs_space <- function(
+  prev,
+  tok
+) {
 
   p <- prev$token
   t <- tok$token
@@ -775,8 +796,8 @@ needs_space <- function(prev, tok) {
   }
 
   symbols <- c("SYMBOL", "SYMBOL_FUNCTION_CALL", "SYMBOL_FORMALS",
-               "SYMBOL_SUB", "SYMBOL_PACKAGE", "NUM_CONST", "STR_CONST",
-               "NULL_CONST", "SPECIAL")
+    "SYMBOL_SUB", "SYMBOL_PACKAGE", "NUM_CONST", "STR_CONST",
+    "NULL_CONST", "SPECIAL")
 
   if (p %in% symbols && t %in% symbols) {
     return(TRUE)
@@ -784,7 +805,6 @@ needs_space <- function(prev, tok) {
 
   FALSE
 }
-
 
 #' Extract Expression Text from Source Lines
 #'
@@ -795,12 +815,16 @@ needs_space <- function(prev, tok) {
 #' @param target_indent Target indentation string for continuation lines.
 #' @return Expression text with first line unindented, continuation lines re-indented.
 #' @keywords internal
-extract_expr_text <- function(lines, tokens, target_indent) {
+extract_expr_text <- function(
+  lines,
+  tokens,
+  target_indent
+) {
   if (nrow(tokens) == 0) return("")
 
   # Get line range
   start_line <- min(tokens$line1)
-  end_line <- max(tokens$line2)  # Use line2 for end position
+  end_line <- max(tokens$line2) # Use line2 for end position
 
   # Single line - just use format_line_tokens
   if (start_line == end_line) {
@@ -809,14 +833,14 @@ extract_expr_text <- function(lines, tokens, target_indent) {
 
   # Multi-line - extract from source
   # First line: from first token to end of line
-  first_tok <- tokens[tokens$line1 == start_line, ][1, ]
+  first_tok <- tokens[tokens$line1 == start_line,][1,]
   first_line_text <- substring(lines[start_line], first_tok$col1)
 
   # Middle lines: full line content, re-indented
   result_lines <- first_line_text
 
   if (end_line > start_line) {
-    for (ln in (start_line + 1):end_line) {
+    for (ln in (start_line + 1) :end_line) {
       line_text <- lines[ln]
       # Remove existing indentation and add target indent
       trimmed <- sub("^\\s*", "", line_text)
@@ -827,7 +851,6 @@ extract_expr_text <- function(lines, tokens, target_indent) {
 
   paste(result_lines, collapse = "")
 }
-
 
 #' Format Blank Lines
 #'
@@ -841,3 +864,4 @@ format_blank_lines <- function(code) {
   code <- gsub("\n+$", "\n", code)
   code
 }
+

@@ -18,7 +18,6 @@ rformat <- function(code) {
   format_blank_lines(formatted)
 }
 
-
 #' Format R File
 #'
 #' Format an R file in place or write to a new file.
@@ -42,13 +41,16 @@ rformat_file <- function(
   formatted <- rformat(code)
 
   if (!dry_run) {
-    out_path <- if (is.null(output)) path else output
+    if (is.null(output)) {
+      out_path <- path
+    } else {
+      out_path <- output
+    }
     writeLines(formatted, out_path)
   }
 
   invisible(formatted)
 }
-
 
 #' Format R Files in Directory
 #'
@@ -95,3 +97,4 @@ rformat_dir <- function(
 
   invisible(modified)
 }
+
