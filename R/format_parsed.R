@@ -567,12 +567,18 @@ reformat_one_inline_if <- function(code) {
       ftok <- terminals[false_end, ]
 
       # Track nesting
+      prev_paren_depth <- false_paren_depth
       if (ftok$token == "'('") false_paren_depth <- false_paren_depth + 1
       if (ftok$token == "')'") false_paren_depth <- false_paren_depth - 1
       if (ftok$token == "'{'") false_brace_depth <- false_brace_depth + 1
       if (ftok$token == "'}'") false_brace_depth <- false_brace_depth - 1
 
-      # End at line break when not nested
+      # If we just closed the outermost paren/brace, include this token and stop
+      if (prev_paren_depth > 0 && false_paren_depth == 0 && false_brace_depth == 0) {
+        break
+      }
+
+      # End at line break when not nested (for simple expressions)
       if (ftok$line1 > assign_line && false_paren_depth <= 0 && false_brace_depth <= 0) {
         false_end <- false_end - 1
         break
@@ -585,13 +591,31 @@ reformat_one_inline_if <- function(code) {
       false_end <- nrow(terminals)
     }
 
+    # Determine line ranges for true and false expressions
+    true_end_line <- if (nrow(true_tokens) > 0) max(true_tokens$line1) else assign_line
     false_tokens <- terminals[false_start:false_end, ]
-    false_text <- format_line_tokens(false_tokens)
+    false_end_line <- if (nrow(false_tokens) > 0) max(false_tokens$line1) else assign_line
 
     # Get base indent from current line
     current_line <- lines[assign_line]
     base_indent <- sub("^(\\s*).*", "\\1", current_line)
     inner_indent <- paste0(base_indent, "  ")
+
+    # Extract true expression - use original text if multi-line
+    if (true_end_line > assign_line) {
+      # Multi-line true expression - extract from source
+      true_text <- extract_expr_text(lines, true_tokens, inner_indent)
+    } else {
+      true_text <- format_line_tokens(true_tokens)
+    }
+
+    # Extract false expression - use original text if multi-line
+    if (false_end_line > assign_line) {
+      # Multi-line false expression - extract from source
+      false_text <- extract_expr_text(lines, false_tokens, inner_indent)
+    } else {
+      false_text <- format_line_tokens(false_tokens)
+    }
 
     # Build replacement lines
     new_lines <- c(
@@ -603,7 +627,7 @@ reformat_one_inline_if <- function(code) {
     )
 
     # Find actual end line (could span multiple lines)
-    end_line <- max(terminals$line1[false_start:false_end])
+    end_line <- false_end_line
 
     # Replace lines
     new_code_lines <- c(
@@ -635,7 +659,7 @@ format_line_tokens <- function(tokens) {
     return("")
   }
 
-  tokens <- tokens[order(tokens$col1), ]
+  tokens <- tokens[order(tokens$line1, tokens$col1), ]
   parts <- character(nrow(tokens))
   prev <- NULL
 
@@ -759,6 +783,49 @@ needs_space <- function(prev, tok) {
   }
 
   FALSE
+}
+
+
+#' Extract Expression Text from Source Lines
+#'
+#' Extract original text for a multi-line expression and re-indent it.
+#'
+#' @param lines Source code lines.
+#' @param tokens Token data frame for the expression.
+#' @param target_indent Target indentation string for continuation lines.
+#' @return Expression text with first line unindented, continuation lines re-indented.
+#' @keywords internal
+extract_expr_text <- function(lines, tokens, target_indent) {
+  if (nrow(tokens) == 0) return("")
+
+  # Get line range
+  start_line <- min(tokens$line1)
+  end_line <- max(tokens$line2)  # Use line2 for end position
+
+  # Single line - just use format_line_tokens
+  if (start_line == end_line) {
+    return(format_line_tokens(tokens))
+  }
+
+  # Multi-line - extract from source
+  # First line: from first token to end of line
+  first_tok <- tokens[tokens$line1 == start_line, ][1, ]
+  first_line_text <- substring(lines[start_line], first_tok$col1)
+
+  # Middle lines: full line content, re-indented
+  result_lines <- first_line_text
+
+  if (end_line > start_line) {
+    for (ln in (start_line + 1):end_line) {
+      line_text <- lines[ln]
+      # Remove existing indentation and add target indent
+      trimmed <- sub("^\\s*", "", line_text)
+      # Add extra indent for continuation (2 more spaces)
+      result_lines <- c(result_lines, paste0("\n", target_indent, "  ", trimmed))
+    }
+  }
+
+  paste(result_lines, collapse = "")
 }
 
 
