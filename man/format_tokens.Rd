@@ -13,7 +13,7 @@ format_tokens(code)
 Formatted code as character string.
 }
 \description{
-Internal function to format R code using getParseData tokens. Calculates
-proper indentation based on nesting depth.
+Internal function to format R code using getParseData tokens.
+Calculates proper indentation based on nesting depth.
 }
 \keyword{internal}

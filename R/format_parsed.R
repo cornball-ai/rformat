@@ -5,6 +5,7 @@
 #'
 #' @param code Character string of R code.
 #' @return Formatted code as character string.
+#' @importFrom utils getParseData
 #' @keywords internal
 format_tokens <- function(code) {
 

@@ -13,8 +13,9 @@ reformat_function_defs(code)
 Code with reformatted function definitions.
 }
 \description{
-Ensures function definitions follow style guide: - First argument on new
-line after function( - Each argument on its own line - Closing ) \{ on
-its own line
+Ensures function definitions follow style guide:
+- First argument on new line after function(
+- Each argument on its own line
+- Closing ) \{ on its own line
 }
 \keyword{internal}

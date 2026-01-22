@@ -13,7 +13,13 @@ reformat_inline_if(code)
 Code with reformatted inline if-else.
 }
 \description{
-Expands inline if-else to multi-line format per style guide: x <- if
-(cond) a else b becomes: if (cond) \{ x <- a \} else \{ x <- b \}
+Expands inline if-else to multi-line format per style guide:
+x <- if (cond) a else b
+becomes:
+if (cond) \{
+x <- a
+\} else \{
+x <- b
+\}
 }
 \keyword{internal}
