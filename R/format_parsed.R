@@ -4,18 +4,18 @@
 #' Calculates proper indentation based on nesting depth.
 #'
 #' @param code Character string of R code.
-#' @param indent Number of spaces per indentation level (default 4).
+#' @param indent Integer for spaces (default 4), or character string for
+#'   literal indent (e.g., `"\t\t"` for vintage R Core style).
+#' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
-format_tokens <- function(
-  code,
-  indent = 4L)
+format_tokens <- function (code, indent = 4L, expand_if = FALSE)
 {
     # Parse with source tracking
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
-        error = function(e) NULL
+        error = function (e) NULL
     )
 
     if (is.null(parsed)) {
@@ -96,7 +96,11 @@ format_tokens <- function(
     }
 
     # Build output
-    indent_str <- strrep(" ", indent)
+    if (is.character(indent)) {
+        indent_str <- indent
+    } else {
+        indent_str <- strrep(" ", indent)
+    }
     out_lines <- character(length(orig_lines))
 
     for (line_num in seq_along(orig_lines)) {
@@ -152,8 +156,10 @@ format_tokens <- function(
     # Reformat function definitions
     result <- reformat_function_defs(result)
 
-    # Reformat inline if-else to multi-line
-    result <- reformat_inline_if(result)
+    # Reformat inline if-else to multi-line (optional)
+    if (expand_if) {
+        result <- reformat_inline_if(result)
+    }
 
     result
 }
@@ -190,10 +196,14 @@ reformat_function_defs <- function(code) {
 
 #' Reformat One Function Definition
 #'
+#' Uses R Core continuation style: args on one line if they fit,
+#' otherwise wrap with alignment to opening paren. Brace on own line.
+#'
 #' @param code Code string.
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-reformat_one_function <- function(code) {
+reformat_one_function <- function(code, line_limit = 80L) {
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
         error = function(e) NULL
@@ -229,8 +239,6 @@ reformat_one_function <- function(code) {
         if (next_idx > nrow(terminals)) next
         if (terminals$token[next_idx] != "'('") next
 
-        open_paren_line <- terminals$line1[next_idx]
-
         # Find matching closing )
         paren_depth <- 1
         close_idx <- next_idx + 1
@@ -247,39 +255,18 @@ reformat_one_function <- function(code) {
 
         close_paren_line <- terminals$line1[close_idx]
 
-        # Get all formals between ( and )
-        formal_indices <- which(
-            terminals$token == "SYMBOL_FORMALS" &
-            seq_len(nrow(terminals)) > next_idx &
-            seq_len(nrow(terminals)) < close_idx
-        )
-
-        # Skip if fewer than 2 formals (don't split function(x) or function(e))
-        if (length(formal_indices) < 2) next
-
         # Check if there's a { after the )
         has_brace <- close_idx + 1 <= nrow(terminals) &&
         terminals$token[close_idx + 1] == "'{'"
-
-        # Check if reformatting needed:
-        # 1. First formal on same line as function(, OR
-        # 2. { on same line as ), OR
-        # 3. ) not on same line as last formal
-        first_formal_line <- terminals$line1[formal_indices[1]]
-        last_formal_line <- terminals$line1[formal_indices[length(formal_indices)]]
-        brace_on_same_line <- has_brace && terminals$line1[close_idx + 1] == close_paren_line
-        paren_not_with_last_formal <- close_paren_line != last_formal_line
-        needs_reformat <- first_formal_line == func_line ||
-        brace_on_same_line ||
-        paren_not_with_last_formal
-        if (!needs_reformat) next
-
-        # Need to reformat - extract the function signature
-        # Find base indent (everything before 'function')
-        func_line_content <- lines[func_line]
-        base_indent <- sub("^(\\s*).*", "\\1", func_line_content)
+        if (has_brace) {
+            brace_line <- terminals$line1[close_idx + 1]
+        } else {
+            brace_line <- NA
+        }
 
         # Find what comes before 'function' on the line
+        func_line_content <- lines[func_line]
+        base_indent <- sub("^(\\s*).*", "\\1", func_line_content)
         prefix_match <- regmatches(
             func_line_content,
             regexpr("^.*?(?=function)", func_line_content, perl = TRUE)
@@ -290,16 +277,8 @@ reformat_one_function <- function(code) {
             prefix <- ""
         }
 
-        # Build new function signature
-        new_lines <- character(0)
-
-        # First line: prefix + function(
-        new_lines <- c(new_lines, paste0(prefix, "function("))
-
         # Collect all formals with their defaults
-        arg_indent <- paste0(base_indent, "  ")
         formal_texts <- character(0)
-
         i <- next_idx + 1
         while (i < close_idx) {
             tok <- terminals[i,]
@@ -340,38 +319,53 @@ reformat_one_function <- function(code) {
                 formal_texts <- c(formal_texts, formal_text)
             }
 
-            if (terminals$token[i] == "','") {
-                # Skip comma, we'll add our own
-            }
-
             i <- i + 1
         }
 
-        # Add each formal on its own line, with ) on the last arg line
-        for (j in seq_along(formal_texts)) {
-            if (j < length(formal_texts)) {
-                suffix <- ","
-            } else {
-                suffix <- ")"
+        # Build single-line signature: prefix + function (arg1, arg2, ...)
+        single_line_sig <- paste0(prefix, "function (", paste(formal_texts, collapse = ", "), ")")
+
+        # Check if single line fits
+        if (nchar(single_line_sig) <= line_limit) {
+            # Single line style
+            new_lines <- single_line_sig
+        } else {
+            # Continuation style - wrap at commas, align to opening paren
+            cont_indent <- strrep(" ", nchar(prefix) + nchar("function ("))
+            new_lines <- character(0)
+            current_line <- paste0(prefix, "function (")
+
+            for (j in seq_along(formal_texts)) {
+                arg_with_comma <- if (j < length(formal_texts)) {
+                    paste0(formal_texts[j], ", ")
+                } else {
+                    paste0(formal_texts[j], ")")
+                }
+
+                # Would adding this arg exceed the limit?
+                test_line <- paste0(current_line, arg_with_comma)
+                if (nchar(test_line) > line_limit && nchar(current_line) > nchar(cont_indent)) {
+                    # Wrap: save current line (remove trailing space if any)
+                    new_lines <- c(new_lines, sub(" $", "", current_line))
+                    current_line <- paste0(cont_indent, arg_with_comma)
+                } else {
+                    current_line <- test_line
+                }
             }
-            new_lines <- c(new_lines, paste0(arg_indent, formal_texts[j], suffix))
+            # Add final line
+            new_lines <- c(new_lines, sub(" $", "", current_line))
         }
 
-        # Check if there's a function body without braces (single expression body)
-        # This handles cases like: function(x, y) if (is.null(x)) y else x
+        # Check if there's a function body without braces (inline body)
         has_inline_body <- FALSE
         inline_body <- ""
         if (!has_brace && close_idx + 1 <= nrow(terminals)) {
-            # There are tokens after ) that aren't { - this is an inline body
             body_tokens <- terminals[terminals$line1 >= close_paren_line &
             seq_len(nrow(terminals)) > close_idx,]
             if (nrow(body_tokens) > 0) {
                 has_inline_body <- TRUE
-                # Get the original text from close_paren position to end of expression
-                # Find all lines that are part of this expression
                 body_end_line <- max(body_tokens$line1)
                 body_lines <- lines[close_paren_line:body_end_line]
-                # Get everything after the ) on the first line
                 first_body_line <- body_lines[1]
                 close_paren_col <- terminals$col2[close_idx]
                 inline_body <- substring(first_body_line, close_paren_col + 1)
@@ -382,25 +376,19 @@ reformat_one_function <- function(code) {
             }
         }
 
-        # Add opening brace on its own line (if present)
+        # Add brace or inline body
         if (has_brace) {
             new_lines <- c(new_lines, paste0(base_indent, "{"))
         } else if (has_inline_body) {
-            # Inline body goes after the ) which is already on last arg line
-            # Remove the ) we just added and replace with ) + body
-            last_idx <- length(new_lines)
-            last_line <- new_lines[last_idx]
-            new_lines[last_idx] <- paste0(substr(last_line, 1, nchar(last_line) - 1), ") ", inline_body)
+            # Append inline body to last line
+            new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)], " ", inline_body)
         }
 
-        # Replace lines from func_line to close_paren_line (and { if present)
+        # Check if reformatting is actually needed
         end_line <- close_paren_line
-        if (has_brace && terminals$line1[close_idx + 1] == close_paren_line) {
-            # { is on same line as )
-        } else if (has_brace) {
-            end_line <- terminals$line1[close_idx + 1]
+        if (has_brace) {
+            end_line <- brace_line
         } else if (has_inline_body) {
-            # Include all lines of the inline body
             body_tokens <- terminals[terminals$line1 >= close_paren_line &
             seq_len(nrow(terminals)) > close_idx,]
             if (nrow(body_tokens) > 0) {
@@ -408,9 +396,12 @@ reformat_one_function <- function(code) {
             }
         }
 
+        old_lines <- lines[func_line:end_line]
+        if (identical(old_lines, new_lines)) next
+
         # Replace the lines and return
         new_code_lines <- c(
-            lines[seq_len(func_line - 1)],
+            if (func_line > 1) lines[seq_len(func_line - 1)] else character(0),
             new_lines,
             if (end_line < length(lines)) lines[seq(end_line + 1, length(lines))] else character(0)
         )
@@ -495,18 +486,24 @@ reformat_one_inline_if <- function(code) {
         assign_line <- tok$line1
 
         # Find IF token after assignment on same line
+        # Skip if there's a FUNCTION token between assignment and IF
         if_idx <- NULL
+        found_function <- FALSE
         for (j in (i + 1) :nrow(terminals)) {
             if (j > nrow(terminals)) break
             next_tok <- terminals[j,]
             if (next_tok$line1 != assign_line) break
+            if (next_tok$token == "FUNCTION") {
+                found_function <- TRUE
+                break
+            }
             if (next_tok$token == "IF") {
                 if_idx <- j
                 break
             }
         }
 
-        if (is.null(if_idx)) next
+        if (found_function || is.null(if_idx)) next
 
         # Found pattern: assignment followed by if
         # Now find the structure: if ( cond ) true_expr else false_expr
@@ -715,8 +712,8 @@ format_line_tokens <- function(tokens) {
 #' @return Logical.
 #' @keywords internal
 needs_space <- function(
-  prev,
-  tok)
+    prev,
+    tok)
 {
     p <- prev$token
     t <- tok$token
@@ -822,9 +819,9 @@ needs_space <- function(
 #' @return Expression text with first line unindented, continuation lines re-indented.
 #' @keywords internal
 extract_expr_text <- function(
-  lines,
-  tokens,
-  target_indent)
+    lines,
+    tokens,
+    target_indent)
 {
     if (nrow(tokens) == 0) return("")
 

@@ -4,12 +4,15 @@
 \alias{rformat}
 \title{Format R Code}
 \usage{
-rformat(code, indent = 4L)
+rformat(code, indent = 4L, expand_if = FALSE)
 }
 \arguments{
 \item{code}{Character string of R code to format.}
 
-\item{indent}{Number of spaces per indentation level (default 4, R Core style).}
+\item{indent}{Indentation per level: integer for spaces (default 4), or
+character string for literal indent (e.g., `"\t\t"` for vintage R Core style).}
+
+\item{expand_if}{Expand inline if-else to multi-line (default FALSE).}
 }
 \value{
 Formatted code as a character string.
@@ -20,4 +23,6 @@ Format R code string according to base R style conventions.
 \examples{
 rformat("x<-1+2")
 rformat("if(x>0){y<-1}")
+# Expand inline if-else
+rformat("x <- if (a) b else c", expand_if = TRUE)
 }

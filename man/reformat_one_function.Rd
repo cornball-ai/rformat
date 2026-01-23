@@ -4,15 +4,18 @@
 \alias{reformat_one_function}
 \title{Reformat One Function Definition}
 \usage{
-reformat_one_function(code)
+reformat_one_function(code, line_limit = 80L)
 }
 \arguments{
 \item{code}{Code string.}
+
+\item{line_limit}{Maximum line length before wrapping (default 80).}
 }
 \value{
 Modified code or NULL if no changes.
 }
 \description{
-Reformat One Function Definition
+Uses R Core continuation style: args on one line if they fit,
+otherwise wrap with alignment to opening paren. Brace on own line.
 }
 \keyword{internal}
