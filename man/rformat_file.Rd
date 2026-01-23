@@ -4,7 +4,7 @@
 \alias{rformat_file}
 \title{Format R File}
 \usage{
-rformat_file(path, output = NULL, dry_run = FALSE)
+rformat_file(path, output = NULL, dry_run = FALSE, indent = 4L)
 }
 \arguments{
 \item{path}{Path to R file.}
@@ -12,6 +12,8 @@ rformat_file(path, output = NULL, dry_run = FALSE)
 \item{output}{Optional output path. If NULL, overwrites input file.}
 
 \item{dry_run}{If TRUE, return formatted code without writing.}
+
+\item{indent}{Number of spaces per indentation level (default 4, R Core style).}
 }
 \value{
 Invisibly returns formatted code.

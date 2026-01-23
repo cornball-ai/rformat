@@ -4,10 +4,12 @@
 \alias{format_tokens}
 \title{Format R Code Using Token-Based Parsing}
 \usage{
-format_tokens(code)
+format_tokens(code, indent = 4L)
 }
 \arguments{
 \item{code}{Character string of R code.}
+
+\item{indent}{Number of spaces per indentation level (default 4).}
 }
 \value{
 Formatted code as character string.

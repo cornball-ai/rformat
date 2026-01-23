@@ -4,7 +4,7 @@
 \alias{rformat_dir}
 \title{Format R Files in Directory}
 \usage{
-rformat_dir(path = ".", recursive = TRUE, dry_run = FALSE)
+rformat_dir(path = ".", recursive = TRUE, dry_run = FALSE, indent = 4L)
 }
 \arguments{
 \item{path}{Path to directory.}
@@ -12,6 +12,8 @@ rformat_dir(path = ".", recursive = TRUE, dry_run = FALSE)
 \item{recursive}{If TRUE, process subdirectories.}
 
 \item{dry_run}{If TRUE, report changes without writing.}
+
+\item{indent}{Number of spaces per indentation level (default 4, R Core style).}
 }
 \value{
 Invisibly returns vector of modified file paths.

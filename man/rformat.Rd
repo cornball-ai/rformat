@@ -4,10 +4,12 @@
 \alias{rformat}
 \title{Format R Code}
 \usage{
-rformat(code)
+rformat(code, indent = 4L)
 }
 \arguments{
 \item{code}{Character string of R code to format.}
+
+\item{indent}{Number of spaces per indentation level (default 4, R Core style).}
 }
 \value{
 Formatted code as a character string.

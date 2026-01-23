@@ -58,8 +58,8 @@ code <- "tryCatch(
   )
 )"
 result <- rformat(code)
-# x should be indented 4 spaces (2 for tryCatch, 2 for foo)
+# x should be indented 8 spaces (4 for tryCatch, 4 for foo)
 expect_true(
-  grepl("\n    x,", result),
+  grepl("\n        x,", result),
   info = "Nested parens should increase indentation"
 )
