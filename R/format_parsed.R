@@ -6,11 +6,13 @@
 #' @param code Character string of R code.
 #' @param indent Integer for spaces (default 4), or character string for
 #'   literal indent (e.g., `"\t\t"` for vintage R Core style).
+#' @param wrap Continuation style: `"paren"` (default) aligns to opening
+#'   parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
-format_tokens <- function (code, indent = 4L, expand_if = FALSE)
+format_tokens <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE)
 {
     # Parse with source tracking
     parsed <- tryCatch(
@@ -154,7 +156,7 @@ format_tokens <- function (code, indent = 4L, expand_if = FALSE)
     }
 
     # Reformat function definitions
-    result <- reformat_function_defs(result)
+    result <- reformat_function_defs(result, wrap = wrap)
 
     # Reformat inline if-else to multi-line (optional)
     if (expand_if) {
@@ -167,14 +169,16 @@ format_tokens <- function (code, indent = 4L, expand_if = FALSE)
 #' Reformat Function Definitions
 #'
 #' Ensures function definitions follow style guide:
-#' - First argument on new line after function(
-#' - Each argument on its own line
-#' - Closing ) { on its own line
+#' - Short signatures on one line
+#' - Long signatures wrap with continuation indent
+#' - Brace on own line
 #'
 #' @param code Formatted code string.
+#' @param wrap Continuation style: `"paren"` or `"fixed"`.
 #' @return Code with reformatted function definitions.
 #' @keywords internal
-reformat_function_defs <- function(code) {
+reformat_function_defs <- function(code, wrap = "paren")
+{
     # Process one function at a time, re-parsing each time
     # to handle line number changes
     changed <- TRUE
@@ -184,7 +188,7 @@ reformat_function_defs <- function(code) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- reformat_one_function(code)
+        result <- reformat_one_function(code, wrap = wrap)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -197,13 +201,16 @@ reformat_function_defs <- function(code) {
 #' Reformat One Function Definition
 #'
 #' Uses R Core continuation style: args on one line if they fit,
-#' otherwise wrap with alignment to opening paren. Brace on own line.
+#' otherwise wrap with continuation indent. Brace on own line.
 #'
 #' @param code Code string.
+#' @param wrap Continuation style: `"paren"` aligns to opening parenthesis,
+#'   `"fixed"` uses 8-space indent.
 #' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-reformat_one_function <- function(code, line_limit = 80L) {
+reformat_one_function <- function(code, wrap = "paren", line_limit = 80L)
+{
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
         error = function(e) NULL
@@ -330,8 +337,13 @@ reformat_one_function <- function(code, line_limit = 80L) {
             # Single line style
             new_lines <- single_line_sig
         } else {
-            # Continuation style - wrap at commas, align to opening paren
-            cont_indent <- strrep(" ", nchar(prefix) + nchar("function ("))
+            # Continuation style - wrap at commas
+            if (wrap == "fixed") {
+                cont_indent <- strrep(" ", 8L)
+            } else {
+                # Align to opening paren
+                cont_indent <- strrep(" ", nchar(prefix) + nchar("function ("))
+            }
             new_lines <- character(0)
             current_line <- paste0(prefix, "function (")
 

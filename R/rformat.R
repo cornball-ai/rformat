@@ -5,6 +5,8 @@
 #' @param code Character string of R code to format.
 #' @param indent Indentation per level: integer for spaces (default 4), or
 #'   character string for literal indent (e.g., `"\t\t"` for vintage R Core style).
+#' @param wrap Continuation style for long function signatures: `"paren"`
+#'   (default) aligns to opening parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @return Formatted code as a character string.
 #' @export
@@ -13,13 +15,14 @@
 #' rformat("if(x>0){y<-1}")
 #' # Expand inline if-else
 #' rformat("x <- if (a) b else c", expand_if = TRUE)
-rformat <- function (code, indent = 4L, expand_if = FALSE)
+rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE)
 {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
 
-    formatted <- format_tokens(code, indent = indent, expand_if = expand_if)
+    formatted <- format_tokens(code, indent = indent, wrap = wrap,
+        expand_if = expand_if)
     format_blank_lines(formatted)
 }
 
@@ -32,18 +35,21 @@ rformat <- function (code, indent = 4L, expand_if = FALSE)
 #' @param dry_run If TRUE, return formatted code without writing.
 #' @param indent Indentation per level: integer for spaces (default 4), or
 #'   character string for literal indent (e.g., `"\t\t"` for vintage R Core style).
+#' @param wrap Continuation style for long function signatures: `"paren"`
+#'   (default) aligns to opening parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @return Invisibly returns formatted code.
 #' @export
 rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
-                          expand_if = FALSE)
+                          wrap = "paren", expand_if = FALSE)
 {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
 
     code <- paste(readLines(path, warn = FALSE), collapse = "\n")
-    formatted <- rformat(code, indent = indent, expand_if = expand_if)
+    formatted <- rformat(code, indent = indent, wrap = wrap,
+        expand_if = expand_if)
 
     if (!dry_run) {
         if (is.null(output)) {
@@ -66,11 +72,13 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' @param dry_run If TRUE, report changes without writing.
 #' @param indent Indentation per level: integer for spaces (default 4), or
 #'   character string for literal indent (e.g., `"\t\t"` for vintage R Core style).
+#' @param wrap Continuation style for long function signatures: `"paren"`
+#'   (default) aligns to opening parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @return Invisibly returns vector of modified file paths.
 #' @export
 rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
-                         indent = 4L, expand_if = FALSE)
+                         indent = 4L, wrap = "paren", expand_if = FALSE)
 {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
@@ -87,7 +95,8 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
 
     for (f in files) {
         original <- paste(readLines(f, warn = FALSE), collapse = "\n")
-        formatted <- rformat(original, indent = indent, expand_if = expand_if)
+        formatted <- rformat(original, indent = indent, wrap = wrap,
+            expand_if = expand_if)
 
         if (formatted != original) {
             modified <- c(modified, f)

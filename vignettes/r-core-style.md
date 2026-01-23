@@ -198,24 +198,28 @@ files used tabs (which displayed as 8 characters).
 
 ## rformat Implementation
 
-Based on this analysis, rformat provides flexible indent options:
+Based on this analysis, rformat provides flexible options:
 
 - **Default (4 spaces):** Modern style, matches R Dev Guide recommendation
 - **Tabs:** For those who prefer tab characters
 
 ```{r eval=FALSE}
-# Modern style (default) - 4 spaces
+# Modern style (default) - 4 spaces, paren alignment
 rformat("f <- function(x, y) { x + y }")
 
 # Single tab per indent level
 rformat("f <- function(x, y) { x + y }", indent = "\t")
 
-# 2 spaces (tidyverse-ish)
+# 2 spaces
 rformat("f <- function(x, y) { x + y }", indent = 2L)
+
+# Fixed 8-space continuation (instead of paren alignment)
+rformat("f <- function(x, y) { x + y }", wrap = "fixed")
 ```
 
 rformat uses R Core continuation style for function signatures:
 
 - **Short signatures** stay on one line: `function (x, y)`
-- **Long signatures** wrap with alignment to the opening paren
+- **Long signatures** wrap with continuation indent (default: align to paren,
+  or 8-space fixed with `wrap = "fixed"`)
 - **Opening brace** `{` always on its own line
