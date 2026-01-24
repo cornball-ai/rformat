@@ -1,6 +1,6 @@
 <!--
 %\VignetteIndexEntry{R Core Style Analysis}
-%\VignetteEngine{simplermarkdown::mdweave_to_md}
+%\VignetteEngine{simplermarkdown::mdweave_to_html}
 %\VignetteEncoding{UTF-8}
 -->
 ---
