@@ -4,10 +4,13 @@
 \alias{reformat_one_function}
 \title{Reformat One Function Definition}
 \usage{
-reformat_one_function(code, line_limit = 80L)
+reformat_one_function(code, wrap = "paren", line_limit = 80L)
 }
 \arguments{
 \item{code}{Code string.}
+
+\item{wrap}{Continuation style: `"paren"` aligns to opening parenthesis,
+`"fixed"` uses 8-space indent.}
 
 \item{line_limit}{Maximum line length before wrapping (default 80).}
 }
@@ -16,6 +19,6 @@ Modified code or NULL if no changes.
 }
 \description{
 Uses R Core continuation style: args on one line if they fit,
-otherwise wrap with alignment to opening paren. Brace on own line.
+otherwise wrap with continuation indent. Brace on own line.
 }
 \keyword{internal}

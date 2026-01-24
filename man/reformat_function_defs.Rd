@@ -4,18 +4,20 @@
 \alias{reformat_function_defs}
 \title{Reformat Function Definitions}
 \usage{
-reformat_function_defs(code)
+reformat_function_defs(code, wrap = "paren")
 }
 \arguments{
 \item{code}{Formatted code string.}
+
+\item{wrap}{Continuation style: `"paren"` or `"fixed"`.}
 }
 \value{
 Code with reformatted function definitions.
 }
 \description{
 Ensures function definitions follow style guide:
-- First argument on new line after function(
-- Each argument on its own line
-- Closing ) \{ on its own line
+- Short signatures on one line
+- Long signatures wrap with continuation indent
+- Brace on own line
 }
 \keyword{internal}
