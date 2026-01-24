@@ -5,7 +5,7 @@
 #'
 #' @param code Character string of R code.
 #' @param indent Integer for spaces (default 4), or character string for
-#'   literal indent (e.g., `"\t\t"` for vintage R Core style).
+#'   literal indent (e.g., `"\\t\\t"` for vintage R Core style).
 #' @param wrap Continuation style: `"paren"` (default) aligns to opening
 #'   parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
