@@ -1,10 +1,10 @@
+<!--
+%\VignetteIndexEntry{R Core Style Analysis}
+%\VignetteEngine{simplermarkdown::mdweave_to_html}
+%\VignetteEncoding{UTF-8}
+-->
 ---
 title: "R Core Style Analysis"
-output: simplermarkdown::md_document
-vignette: >
-  %\VignetteIndexEntry{R Core Style Analysis}
-  %\VignetteEngine{simplermarkdown::mdweave_to_md}
-  %\VignetteEncoding{UTF-8}
 ---
 
 # R Core Style Analysis
