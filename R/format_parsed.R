@@ -9,10 +9,12 @@
 #' @param wrap Continuation style: `"paren"` (default) aligns to opening
 #'   parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
+#' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
-format_tokens <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE)
+format_tokens <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
+                           brace_style = "kr")
 {
     # Parse with source tracking
     parsed <- tryCatch(
@@ -156,7 +158,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE)
     }
 
     # Reformat function definitions
-    result <- reformat_function_defs(result, wrap = wrap)
+    result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style)
 
     # Reformat inline if-else to multi-line (optional)
     if (expand_if) {
@@ -171,13 +173,14 @@ format_tokens <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE)
 #' Ensures function definitions follow style guide:
 #' - Short signatures on one line
 #' - Long signatures wrap with continuation indent
-#' - Brace on own line
+#' - Brace on same line (K&R) or own line (Allman)
 #'
 #' @param code Formatted code string.
 #' @param wrap Continuation style: `"paren"` or `"fixed"`.
+#' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
 #' @return Code with reformatted function definitions.
 #' @keywords internal
-reformat_function_defs <- function(code, wrap = "paren")
+reformat_function_defs <- function(code, wrap = "paren", brace_style = "kr")
 {
     # Process one function at a time, re-parsing each time
     # to handle line number changes
@@ -188,7 +191,7 @@ reformat_function_defs <- function(code, wrap = "paren")
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- reformat_one_function(code, wrap = wrap)
+        result <- reformat_one_function(code, wrap = wrap, brace_style = brace_style)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -201,15 +204,17 @@ reformat_function_defs <- function(code, wrap = "paren")
 #' Reformat One Function Definition
 #'
 #' Uses R Core continuation style: args on one line if they fit,
-#' otherwise wrap with continuation indent. Brace on own line.
+#' otherwise wrap with continuation indent.
 #'
 #' @param code Code string.
 #' @param wrap Continuation style: `"paren"` aligns to opening parenthesis,
 #'   `"fixed"` uses 8-space indent.
+#' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
 #' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-reformat_one_function <- function(code, wrap = "paren", line_limit = 80L)
+reformat_one_function <- function(code, wrap = "paren", brace_style = "kr",
+                                  line_limit = 80L)
 {
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
@@ -271,15 +276,12 @@ reformat_one_function <- function(code, wrap = "paren", line_limit = 80L)
             brace_line <- NA
         }
 
-        # Find what comes before 'function' on the line
+        # Find what comes before 'function' on the line using token position
         func_line_content <- lines[func_line]
         base_indent <- sub("^(\\s*).*", "\\1", func_line_content)
-        prefix_match <- regmatches(
-            func_line_content,
-            regexpr("^.*?(?=function)", func_line_content, perl = TRUE)
-        )
-        if (length(prefix_match) > 0) {
-            prefix <- prefix_match
+        # func_tok$col1 is the 1-based column position of "function"
+        if (func_tok$col1 > 1) {
+            prefix <- substring(func_line_content, 1, func_tok$col1 - 1)
         } else {
             prefix <- ""
         }
@@ -390,7 +392,13 @@ reformat_one_function <- function(code, wrap = "paren", line_limit = 80L)
 
         # Add brace or inline body
         if (has_brace) {
-            new_lines <- c(new_lines, paste0(base_indent, "{"))
+            if (brace_style == "kr") {
+                # K&R: brace on same line as closing paren
+                new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)], " {")
+            } else {
+                # Allman: brace on its own line
+                new_lines <- c(new_lines, paste0(base_indent, "{"))
+            }
         } else if (has_inline_body) {
             # Append inline body to last line
             new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)], " ", inline_body)
