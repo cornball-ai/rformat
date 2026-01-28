@@ -37,3 +37,14 @@ Invisibly returns vector of modified file paths.
 \description{
 Format all R files in a directory.
 }
+\examples{
+# Format all R files in a directory (dry run)
+d <- tempfile()
+dir.create(d)
+writeLines("x<-1", file.path(d, "test.R"))
+rformat_dir(d, dry_run = TRUE)
+
+# Format and overwrite
+rformat_dir(d)
+unlink(d, recursive = TRUE)
+}

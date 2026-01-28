@@ -20,8 +20,7 @@
 #' # Allman brace style (legacy)
 #' rformat("f <- function(x) { x }", brace_style = "allman")
 rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
-                     brace_style = "kr")
-{
+                     brace_style = "kr") {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
@@ -47,9 +46,18 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
 #' @return Invisibly returns formatted code.
 #' @export
+#' @examples
+#' # Format a file (dry run to see result without writing)
+#' f <- tempfile(fileext = ".R")
+#' writeLines("x<-1+2", f)
+#' rformat_file(f, dry_run = TRUE)
+#'
+#' # Format and overwrite
+#' rformat_file(f)
+#' readLines(f)
+#' unlink(f)
 rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
-                          wrap = "paren", expand_if = FALSE, brace_style = "kr")
-{
+                          wrap = "paren", expand_if = FALSE, brace_style = "kr") {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
@@ -86,10 +94,19 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
 #' @return Invisibly returns vector of modified file paths.
 #' @export
+#' @examples
+#' # Format all R files in a directory (dry run)
+#' d <- tempfile()
+#' dir.create(d)
+#' writeLines("x<-1", file.path(d, "test.R"))
+#' rformat_dir(d, dry_run = TRUE)
+#'
+#' # Format and overwrite
+#' rformat_dir(d)
+#' unlink(d, recursive = TRUE)
 rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
                          indent = 4L, wrap = "paren", expand_if = FALSE,
-                         brace_style = "kr")
-{
+                         brace_style = "kr") {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
     }

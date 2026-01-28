@@ -37,3 +37,14 @@ Invisibly returns formatted code.
 \description{
 Format an R file in place or write to a new file.
 }
+\examples{
+# Format a file (dry run to see result without writing)
+f <- tempfile(fileext = ".R")
+writeLines("x<-1+2", f)
+rformat_file(f, dry_run = TRUE)
+
+# Format and overwrite
+rformat_file(f)
+readLines(f)
+unlink(f)
+}

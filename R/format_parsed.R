@@ -13,9 +13,8 @@
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
-format_tokens <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
-                           brace_style = "kr")
-{
+format_tokens <- function (code, indent = 4L, wrap = "paren",
+                           expand_if = FALSE, brace_style = "kr") {
     # Parse with source tracking
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
@@ -214,7 +213,7 @@ reformat_function_defs <- function(code, wrap = "paren", brace_style = "kr")
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
 reformat_one_function <- function(code, wrap = "paren", brace_style = "kr",
-                                  line_limit = 80L)
+    line_limit = 80L)
 {
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
