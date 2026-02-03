@@ -63,3 +63,36 @@ expect_true(
   grepl("\n        x,", result),
   info = "Nested parens should increase indentation"
 )
+
+# Multi-line string preservation (regression test)
+# Multi-line strings should not have their content duplicated
+code <- 'DBI::dbExecute(con, "
+    CREATE TABLE foo (
+        id INTEGER
+    )
+")'
+result <- rformat(code)
+# Count occurrences of CREATE TABLE - should be exactly 1
+matches <- gregexpr("CREATE TABLE", result)[[1]]
+expect_equal(
+  length(matches[matches > 0]),
+  1L,
+  info = "Multi-line strings should not be duplicated"
+)
+
+# Multi-line string in function (regression test)
+code <- 'f <- function(x) {
+    sql <- "
+        SELECT *
+        FROM table
+    "
+    sql
+}'
+result <- rformat(code)
+# Should have exactly one SELECT
+matches <- gregexpr("SELECT", result)[[1]]
+expect_equal(
+  length(matches[matches > 0]),
+  1L,
+  info = "Multi-line strings in functions should not be duplicated"
+)

@@ -106,15 +106,42 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     }
     out_lines <- character(length(orig_lines))
 
+    # Track lines that are internal to multi-line tokens (e.g., multi-line strings)
+    # A line should be skipped if:
+    # 1. It's within the span of a multi-line token (between line1+1 and line2)
+    # 2. AND no tokens START on that line (line1 == line_num)
+    # This handles the case where a multi-line string ends on the same line as
+    # other tokens (e.g., closing parenthesis)
+    multiline_covered <- logical(length(orig_lines))
+    for (i in seq_len(nrow(terminals))) {
+        tok <- terminals[i,]
+        if (tok$line2 > tok$line1) {
+            # This token spans multiple lines - mark continuation lines
+            for (ln in (tok$line1 + 1):tok$line2) {
+                if (ln <= length(multiline_covered)) {
+                    multiline_covered[ln] <- TRUE
+                }
+            }
+        }
+    }
+
     for (line_num in seq_along(orig_lines)) {
         line <- orig_lines[line_num]
+
+        # Check if any tokens START on this line
+        line_tokens <- terminals[terminals$line1 == line_num,]
+
+        # Skip lines that are purely internal to multi-line tokens
+        # (covered by a multi-line token AND no tokens start here)
+        if (multiline_covered[line_num] && nrow(line_tokens) == 0) {
+            out_lines[line_num] <- NA_character_
+            next
+        }
 
         if (grepl("^\\s*$", line)) {
             out_lines[line_num] <- ""
             next
         }
-
-        line_tokens <- terminals[terminals$line1 == line_num,]
 
         if (nrow(line_tokens) == 0) {
             out_lines[line_num] <- line
@@ -151,6 +178,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         )
     }
 
+    # Filter out NA lines (multi-line token continuations)
+    out_lines <- out_lines[!is.na(out_lines)]
     result <- paste(out_lines, collapse = "\n")
     if (!grepl("\n$", result) && nchar(result) > 0) {
         result <- paste0(result, "\n")
