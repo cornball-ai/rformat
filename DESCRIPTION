@@ -7,6 +7,8 @@ Authors@R: person("Troy", "Hernandez", role = c("aut", "cre"),
 Description: A minimal R code formatter following base R style conventions.
     Formats R code with consistent spacing, indentation, and structure.
 License: GPL-3
+URL: https://github.com/cornball-ai/rformat
+BugReports: https://github.com/cornball-ai/rformat/issues
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Suggests: tinytest, simplermarkdown
