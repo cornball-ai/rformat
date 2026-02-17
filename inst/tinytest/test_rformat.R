@@ -49,8 +49,8 @@ expect_true(
   info = "Inline function body should be preserved"
 )
 
-# Nested parentheses indentation (regression test)
-# Each level of parens should add one level of indent
+# Nested parentheses collapse (regression test)
+# Short nested calls should collapse to a single line
 code <- "tryCatch(
   foo(
     x,
@@ -58,10 +58,10 @@ code <- "tryCatch(
   )
 )"
 result <- rformat(code)
-# x should be indented 8 spaces (4 for tryCatch, 4 for foo)
-expect_true(
-  grepl("\n        x,", result),
-  info = "Nested parens should increase indentation"
+expect_equal(
+  result,
+  "tryCatch(foo(x, y))\n",
+  info = "Nested short calls should collapse to one line"
 )
 
 # Multi-line string preservation (regression test)
@@ -95,4 +95,41 @@ expect_equal(
   length(matches[matches > 0]),
   1L,
   info = "Multi-line strings in functions should not be duplicated"
+)
+
+# Collapse multi-line c() to single line
+expect_equal(
+  rformat("c(x,\n  y,\n  z\n)"),
+  "c(x, y, z)\n"
+)
+
+# Collapse multi-line list() with named args
+expect_equal(
+  rformat("list(a = 1,\n  b = 2,\n  c = 3\n)"),
+  "list(a = 1, b = 2, c = 3)\n"
+)
+
+# Don't collapse when result would exceed line limit
+long_args <- paste(paste0("very_long_name_", 1:5), collapse = ",\n  ")
+code <- paste0("c(\n  ", long_args, "\n)")
+result <- rformat(code)
+expect_true(
+  grepl("\n", sub("\n$", "", result)),
+  info = "Long calls should stay multi-line"
+)
+
+# Don't collapse calls containing comments
+code <- "c(x,\n  # keep this comment\n  y\n)"
+result <- rformat(code)
+expect_true(
+  grepl("\n", sub("\n$", "", result)),
+  info = "Calls with comments should stay multi-line"
+)
+
+# Don't collapse calls containing function definitions
+code <- "lapply(x,\n  function(i) i + 1\n)"
+result <- rformat(code)
+expect_true(
+  grepl("\n", sub("\n$", "", result)),
+  info = "Calls with function defs should stay multi-line"
 )

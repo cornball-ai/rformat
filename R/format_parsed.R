@@ -185,6 +185,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         result <- paste0(result, "\n")
     }
 
+    # Collapse multi-line calls that fit on one line
+    result <- collapse_calls(result)
+
     # Reformat function definitions
     result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style)
 
@@ -918,5 +921,161 @@ format_blank_lines <- function(code) {
     # Remove trailing newlines (keep one)
     code <- gsub("\n+$", "\n", code)
     code
+}
+
+#' Collapse Multi-Line Function Calls
+#'
+#' Collapses function calls spanning multiple lines into a single line
+#' when the result fits within the line limit. For example:
+#' \preformatted{c(x,
+#'   y,
+#'   z
+#' )}
+#' becomes `c(x, y, z)`.
+#'
+#' @param code Formatted code string.
+#' @param line_limit Maximum line length (default 80).
+#' @return Code with collapsed function calls.
+#' @keywords internal
+collapse_calls <- function(code, line_limit = 80L) {
+    changed <- TRUE
+    max_iterations <- 100
+
+    while (changed && max_iterations > 0) {
+        max_iterations <- max_iterations - 1
+        changed <- FALSE
+
+        result <- collapse_one_call(code, line_limit = line_limit)
+        if (!is.null(result)) {
+            code <- result
+            changed <- TRUE
+        }
+    }
+
+    code
+}
+
+#' Collapse One Multi-Line Function Call
+#'
+#' Finds the first multi-line function call that can fit on one line
+#' and collapses it. Skips calls containing comments.
+#'
+#' @param code Code string.
+#' @param line_limit Maximum line length (default 80).
+#' @return Modified code or NULL if no changes.
+#' @keywords internal
+collapse_one_call <- function(code, line_limit = 80L) {
+    parsed <- tryCatch(
+        parse(text = code, keep.source = TRUE),
+        error = function(e) NULL
+    )
+
+    if (is.null(parsed)) {
+        return(NULL)
+    }
+
+    pd <- getParseData(parsed)
+    if (is.null(pd) || nrow(pd) == 0) {
+        return(NULL)
+    }
+
+    terminals <- pd[pd$terminal,]
+    terminals <- terminals[order(terminals$line1, terminals$col1),]
+
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+
+    # Find function calls: SYMBOL_FUNCTION_CALL followed by '('
+    call_indices <- which(terminals$token == "SYMBOL_FUNCTION_CALL")
+
+    for (ci in call_indices) {
+        # Next token should be '('
+        open_idx <- ci + 1
+        if (open_idx > nrow(terminals)) next
+        if (terminals$token[open_idx] != "'('") next
+
+        open_line <- terminals$line1[open_idx]
+
+        # Find matching ')'
+        paren_depth <- 1
+        close_idx <- open_idx + 1
+        while (close_idx <= nrow(terminals) && paren_depth > 0) {
+            if (terminals$token[close_idx] == "'('") {
+                paren_depth <- paren_depth + 1
+            } else if (terminals$token[close_idx] == "')'") {
+                paren_depth <- paren_depth - 1
+            }
+            if (paren_depth > 0) close_idx <- close_idx + 1
+        }
+
+        if (close_idx > nrow(terminals)) next
+
+        close_line <- terminals$line1[close_idx]
+
+        # Only process multi-line calls
+        if (close_line == open_line) next
+
+        # Skip if any token in the call is a comment
+        inner_tokens <- terminals[seq(open_idx, close_idx),]
+        if (any(inner_tokens$token == "COMMENT")) next
+
+        # Skip if the call contains a FUNCTION definition
+        if (any(inner_tokens$token == "FUNCTION")) next
+
+        # Build collapsed text from tokens: func(args)
+        call_tokens <- terminals[seq(ci, close_idx),]
+        collapsed <- format_line_tokens(call_tokens)
+
+        # Get prefix: everything before the function name on its line
+        func_line <- terminals$line1[ci]
+        func_col <- terminals$col1[ci]
+        if (func_col > 1) {
+            prefix <- substring(lines[func_line], 1, func_col - 1)
+        } else {
+            prefix <- ""
+        }
+
+        # Check if it fits
+        full_line <- paste0(prefix, collapsed)
+        if (nchar(full_line) > line_limit) next
+
+        # Check if there are tokens after the closing paren on its line
+        # that need to be appended (e.g., trailing comma, closing paren of outer call)
+        after_close <- terminals[terminals$line1 == close_line &
+            terminals$col1 > terminals$col1[close_idx],]
+        suffix <- ""
+        if (nrow(after_close) > 0) {
+            suffix <- format_line_tokens(after_close)
+            # Add space before suffix if needed
+            last_call_tok <- call_tokens[nrow(call_tokens),]
+            first_after <- after_close[1,]
+            if (needs_space(last_call_tok, first_after)) {
+                suffix <- paste0(" ", suffix)
+            }
+        }
+
+        full_line <- paste0(full_line, suffix)
+        if (nchar(full_line) > line_limit) next
+
+        # Also check if there are tokens before the function call on func_line
+        # that aren't part of the prefix (i.e., code tokens before the call)
+        before_call <- terminals[terminals$line1 == func_line &
+            terminals$col1 < func_col,]
+
+        # Replace the lines
+        new_code_lines <- c(
+            if (func_line > 1) lines[seq_len(func_line - 1)] else character(0),
+            full_line,
+            if (close_line < length(lines)) lines[seq(close_line + 1, length(lines))] else character(0)
+        )
+
+        result <- paste(new_code_lines, collapse = "\n")
+        if (!grepl("\n$", result) && nchar(result) > 0) {
+            result <- paste0(result, "\n")
+        }
+
+        return(result)
+    }
+
+    NULL
 }
 
