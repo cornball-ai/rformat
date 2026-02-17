@@ -109,13 +109,19 @@ expect_equal(
   "list(a = 1, b = 2, c = 3)\n"
 )
 
-# Don't collapse when result would exceed line limit
+# Long multi-line calls get collapsed then re-wrapped
 long_args <- paste(paste0("very_long_name_", 1:5), collapse = ",\n  ")
 code <- paste0("c(\n  ", long_args, "\n)")
 result <- rformat(code)
 expect_true(
   grepl("\n", sub("\n$", "", result)),
-  info = "Long calls should stay multi-line"
+  info = "Long calls should be wrapped across lines"
+)
+# Should be compactly wrapped, not one-arg-per-line
+result_lines <- strsplit(sub("\n$", "", result), "\n")[[1]]
+expect_true(
+  length(result_lines) < 5,
+  info = "Long calls should wrap compactly, not one-arg-per-line"
 )
 
 # Don't collapse calls containing comments
@@ -132,4 +138,22 @@ result <- rformat(code)
 expect_true(
   grepl("\n", sub("\n$", "", result)),
   info = "Calls with function defs should stay multi-line"
+)
+
+# Wrap long function calls at commas with paren alignment
+expect_equal(
+  rformat("x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e, very_long_f)"),
+  "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e,\n       very_long_f)\n"
+)
+
+# Wrap long named-arg calls
+expect_equal(
+  rformat("result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5, zeta = 6, eta = 7)"),
+  "result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5,\n               zeta = 6, eta = 7)\n"
+)
+
+# Short calls stay on one line
+expect_equal(
+  rformat("x <- c(1, 2, 3)"),
+  "x <- c(1, 2, 3)\n"
 )

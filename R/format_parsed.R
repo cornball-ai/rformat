@@ -188,6 +188,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Collapse multi-line calls that fit on one line
     result <- collapse_calls(result)
 
+    # Wrap long function calls
+    result <- wrap_long_calls(result)
+
     # Reformat function definitions
     result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style)
 
@@ -925,8 +928,8 @@ format_blank_lines <- function(code) {
 
 #' Collapse Multi-Line Function Calls
 #'
-#' Collapses function calls spanning multiple lines into a single line
-#' when the result fits within the line limit. For example:
+#' Collapses function calls spanning multiple lines into a single line.
+#' Long lines are re-wrapped by `wrap_long_calls()` afterward. For example:
 #' \preformatted{c(x,
 #'   y,
 #'   z
@@ -934,10 +937,9 @@ format_blank_lines <- function(code) {
 #' becomes `c(x, y, z)`.
 #'
 #' @param code Formatted code string.
-#' @param line_limit Maximum line length (default 80).
 #' @return Code with collapsed function calls.
 #' @keywords internal
-collapse_calls <- function(code, line_limit = 80L) {
+collapse_calls <- function(code) {
     changed <- TRUE
     max_iterations <- 100
 
@@ -945,7 +947,7 @@ collapse_calls <- function(code, line_limit = 80L) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- collapse_one_call(code, line_limit = line_limit)
+        result <- collapse_one_call(code)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -961,10 +963,9 @@ collapse_calls <- function(code, line_limit = 80L) {
 #' and collapses it. Skips calls containing comments.
 #'
 #' @param code Code string.
-#' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-collapse_one_call <- function(code, line_limit = 80L) {
+collapse_one_call <- function(code) {
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
         error = function(e) NULL
@@ -1034,9 +1035,7 @@ collapse_one_call <- function(code, line_limit = 80L) {
             prefix <- ""
         }
 
-        # Check if it fits
         full_line <- paste0(prefix, collapsed)
-        if (nchar(full_line) > line_limit) next
 
         # Check if there are tokens after the closing paren on its line
         # that need to be appended (e.g., trailing comma, closing paren of outer call)
@@ -1054,7 +1053,6 @@ collapse_one_call <- function(code, line_limit = 80L) {
         }
 
         full_line <- paste0(full_line, suffix)
-        if (nchar(full_line) > line_limit) next
 
         # Also check if there are tokens before the function call on func_line
         # that aren't part of the prefix (i.e., code tokens before the call)
@@ -1079,3 +1077,199 @@ collapse_one_call <- function(code, line_limit = 80L) {
     NULL
 }
 
+#' Wrap Long Function Calls
+#'
+#' Wraps function call lines that exceed the line limit by breaking at commas.
+#' Continuation lines are aligned to the opening parenthesis.
+#'
+#' @param code Formatted code string.
+#' @param line_limit Maximum line length (default 80).
+#' @return Code with wrapped long calls.
+#' @keywords internal
+wrap_long_calls <- function(code, line_limit = 80L) {
+    changed <- TRUE
+    max_iterations <- 100
+
+    while (changed && max_iterations > 0) {
+        max_iterations <- max_iterations - 1
+        changed <- FALSE
+
+        result <- wrap_one_long_call(code, line_limit = line_limit)
+        if (!is.null(result)) {
+            code <- result
+            changed <- TRUE
+        }
+    }
+
+    code
+}
+
+#' Wrap One Long Function Call
+#'
+#' Finds the first single-line function call that exceeds the line limit
+#' and wraps it at commas with paren-aligned continuation.
+#'
+#' @param code Code string.
+#' @param line_limit Maximum line length (default 80).
+#' @return Modified code or NULL if no changes.
+#' @keywords internal
+wrap_one_long_call <- function(code, line_limit = 80L) {
+    parsed <- tryCatch(
+        parse(text = code, keep.source = TRUE),
+        error = function(e) NULL
+    )
+
+    if (is.null(parsed)) {
+        return(NULL)
+    }
+
+    pd <- getParseData(parsed)
+    if (is.null(pd) || nrow(pd) == 0) {
+        return(NULL)
+    }
+
+    terminals <- pd[pd$terminal,]
+    terminals <- terminals[order(terminals$line1, terminals$col1),]
+
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+
+    # Find function calls on lines that exceed the limit
+    call_indices <- which(terminals$token == "SYMBOL_FUNCTION_CALL")
+
+    for (ci in call_indices) {
+        open_idx <- ci + 1
+        if (open_idx > nrow(terminals)) next
+        if (terminals$token[open_idx] != "'('") next
+
+        call_line <- terminals$line1[ci]
+
+        # Only consider single-line calls on lines that are too long
+        if (nchar(lines[call_line]) <= line_limit) next
+
+        # Find matching ')'
+        paren_depth <- 1
+        close_idx <- open_idx + 1
+        while (close_idx <= nrow(terminals) && paren_depth > 0) {
+            if (terminals$token[close_idx] == "'('") {
+                paren_depth <- paren_depth + 1
+            } else if (terminals$token[close_idx] == "')'") {
+                paren_depth <- paren_depth - 1
+            }
+            if (paren_depth > 0) close_idx <- close_idx + 1
+        }
+
+        if (close_idx > nrow(terminals)) next
+
+        # Only wrap single-line calls
+        if (terminals$line1[close_idx] != call_line) next
+
+        # Need at least one comma at depth 1 to have something to wrap
+        has_comma <- FALSE
+        for (k in seq(open_idx + 1, close_idx - 1)) {
+            if (terminals$token[k] == "','" && terminals$line1[k] == call_line) {
+                # Check this comma is at depth 1 (not inside nested parens)
+                depth <- 0
+                for (m in seq(open_idx + 1, k)) {
+                    if (terminals$token[m] == "'('") depth <- depth + 1
+                    if (terminals$token[m] == "')'") depth <- depth - 1
+                }
+                if (depth == 0) {
+                    has_comma <- TRUE
+                    break
+                }
+            }
+        }
+        if (!has_comma) next
+
+        # Continuation indent: align to column after opening paren
+        open_col <- terminals$col2[open_idx]  # col2 of '(' is its position
+        cont_indent <- strrep(" ", open_col)
+
+        # Collect arguments as groups of tokens between commas at depth 1
+        args <- list()
+        current_arg_tokens <- list()
+        depth <- 0
+
+        for (k in seq(open_idx + 1, close_idx - 1)) {
+            tok <- terminals[k,]
+            if (tok$token == "'('") depth <- depth + 1
+            if (tok$token == "')'") depth <- depth - 1
+
+            if (tok$token == "','" && depth == 0) {
+                if (length(current_arg_tokens) > 0) {
+                    arg_df <- do.call(rbind, lapply(current_arg_tokens, as.data.frame))
+                    args[[length(args) + 1]] <- format_line_tokens(arg_df)
+                }
+                current_arg_tokens <- list()
+            } else {
+                current_arg_tokens[[length(current_arg_tokens) + 1]] <- tok
+            }
+        }
+        # Last argument
+        if (length(current_arg_tokens) > 0) {
+            arg_df <- do.call(rbind, lapply(current_arg_tokens, as.data.frame))
+            args[[length(args) + 1]] <- format_line_tokens(arg_df)
+        }
+
+        if (length(args) < 2) next
+
+        # Get prefix (everything before the function name)
+        func_col <- terminals$col1[ci]
+        if (func_col > 1) {
+            prefix <- substring(lines[call_line], 1, func_col - 1)
+        } else {
+            prefix <- ""
+        }
+
+        func_name <- terminals$text[ci]
+
+        # Get suffix (everything after closing paren on the same line)
+        close_col <- terminals$col2[close_idx]
+        line_content <- lines[call_line]
+        if (close_col < nchar(line_content)) {
+            suffix <- substring(line_content, close_col + 1)
+        } else {
+            suffix <- ""
+        }
+
+        # Build wrapped lines
+        new_lines <- character(0)
+        current_line <- paste0(prefix, func_name, "(")
+
+        for (j in seq_along(args)) {
+            if (j < length(args)) {
+                arg_text <- paste0(args[[j]], ", ")
+            } else {
+                arg_text <- paste0(args[[j]], ")", suffix)
+            }
+
+            test_line <- paste0(current_line, arg_text)
+            if (nchar(test_line) > line_limit && nchar(current_line) > nchar(cont_indent)) {
+                new_lines <- c(new_lines, sub(" $", "", current_line))
+                current_line <- paste0(cont_indent, arg_text)
+            } else {
+                current_line <- test_line
+            }
+        }
+        new_lines <- c(new_lines, sub(" $", "", current_line))
+
+        # Only wrap if we actually split into multiple lines
+        if (length(new_lines) < 2) next
+
+        # Replace the line
+        new_code_lines <- c(
+            if (call_line > 1) lines[seq_len(call_line - 1)] else character(0),
+            new_lines,
+            if (call_line < length(lines)) lines[seq(call_line + 1, length(lines))] else character(0)
+        )
+
+        result <- paste(new_code_lines, collapse = "\n")
+        if (!grepl("\n$", result) && nchar(result) > 0) {
+            result <- paste0(result, "\n")
+        }
+
+        return(result)
+    }
+
+    NULL
+}
