@@ -928,8 +928,8 @@ format_blank_lines <- function(code) {
 
 #' Collapse Multi-Line Function Calls
 #'
-#' Collapses function calls spanning multiple lines into a single line
-#' when the result fits within the line limit. For example:
+#' Collapses function calls spanning multiple lines into a single line.
+#' Long lines are re-wrapped by `wrap_long_calls()` afterward. For example:
 #' \preformatted{c(x,
 #'   y,
 #'   z
@@ -937,10 +937,9 @@ format_blank_lines <- function(code) {
 #' becomes `c(x, y, z)`.
 #'
 #' @param code Formatted code string.
-#' @param line_limit Maximum line length (default 80).
 #' @return Code with collapsed function calls.
 #' @keywords internal
-collapse_calls <- function(code, line_limit = 80L) {
+collapse_calls <- function(code) {
     changed <- TRUE
     max_iterations <- 100
 
@@ -948,7 +947,7 @@ collapse_calls <- function(code, line_limit = 80L) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- collapse_one_call(code, line_limit = line_limit)
+        result <- collapse_one_call(code)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -964,10 +963,9 @@ collapse_calls <- function(code, line_limit = 80L) {
 #' and collapses it. Skips calls containing comments.
 #'
 #' @param code Code string.
-#' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-collapse_one_call <- function(code, line_limit = 80L) {
+collapse_one_call <- function(code) {
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
         error = function(e) NULL
@@ -1037,9 +1035,7 @@ collapse_one_call <- function(code, line_limit = 80L) {
             prefix <- ""
         }
 
-        # Check if it fits
         full_line <- paste0(prefix, collapsed)
-        if (nchar(full_line) > line_limit) next
 
         # Check if there are tokens after the closing paren on its line
         # that need to be appended (e.g., trailing comma, closing paren of outer call)
@@ -1057,7 +1053,6 @@ collapse_one_call <- function(code, line_limit = 80L) {
         }
 
         full_line <- paste0(full_line, suffix)
-        if (nchar(full_line) > line_limit) next
 
         # Also check if there are tokens before the function call on func_line
         # that aren't part of the prefix (i.e., code tokens before the call)

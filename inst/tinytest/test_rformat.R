@@ -109,13 +109,19 @@ expect_equal(
   "list(a = 1, b = 2, c = 3)\n"
 )
 
-# Don't collapse when result would exceed line limit
+# Long multi-line calls get collapsed then re-wrapped
 long_args <- paste(paste0("very_long_name_", 1:5), collapse = ",\n  ")
 code <- paste0("c(\n  ", long_args, "\n)")
 result <- rformat(code)
 expect_true(
   grepl("\n", sub("\n$", "", result)),
-  info = "Long calls should stay multi-line"
+  info = "Long calls should be wrapped across lines"
+)
+# Should be compactly wrapped, not one-arg-per-line
+result_lines <- strsplit(sub("\n$", "", result), "\n")[[1]]
+expect_true(
+  length(result_lines) < 5,
+  info = "Long calls should wrap compactly, not one-arg-per-line"
 )
 
 # Don't collapse calls containing comments
