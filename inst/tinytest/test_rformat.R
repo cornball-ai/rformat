@@ -133,3 +133,21 @@ expect_true(
   grepl("\n", sub("\n$", "", result)),
   info = "Calls with function defs should stay multi-line"
 )
+
+# Wrap long function calls at commas with paren alignment
+expect_equal(
+  rformat("x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e, very_long_f)"),
+  "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e,\n       very_long_f)\n"
+)
+
+# Wrap long named-arg calls
+expect_equal(
+  rformat("result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5, zeta = 6, eta = 7)"),
+  "result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5,\n               zeta = 6, eta = 7)\n"
+)
+
+# Short calls stay on one line
+expect_equal(
+  rformat("x <- c(1, 2, 3)"),
+  "x <- c(1, 2, 3)\n"
+)
