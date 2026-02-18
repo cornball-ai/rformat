@@ -191,6 +191,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Wrap long function calls
     result <- wrap_long_calls(result)
 
+    # Add braces to one-liner control flow
+    result <- add_control_braces(result)
+
     # Reformat function definitions
     result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style)
 
@@ -743,14 +746,20 @@ format_line_tokens <- function(tokens) {
     for (i in seq_len(nrow(tokens))) {
         tok <- tokens[i,]
 
+        # Convert = assignment to <-
+        tok_text <- tok$text
+        if (tok$token == "EQ_ASSIGN") {
+            tok_text <- "<-"
+        }
+
         if (!is.null(prev)) {
             if (needs_space(prev, tok)) {
-                parts[i] <- paste0(" ", tok$text)
+                parts[i] <- paste0(" ", tok_text)
             } else {
-                parts[i] <- tok$text
+                parts[i] <- tok_text
             }
         } else {
-            parts[i] <- tok$text
+            parts[i] <- tok_text
         }
 
         prev <- tok
@@ -917,6 +926,8 @@ extract_expr_text <- function(
 #' @return Code with normalized blank lines.
 #' @keywords internal
 format_blank_lines <- function(code) {
+    # Remove trailing whitespace from each line
+    code <- gsub(" +\n", "\n", code)
     # Remove blank lines after opening brace
     code <- gsub("\\{\n\\s*\n", "{\n", code)
     # Collapse multiple blank lines to one
@@ -1271,5 +1282,251 @@ wrap_one_long_call <- function(code, line_limit = 80L) {
         return(result)
     }
 
+    # wrap_one_long_call: no changes
+    NULL
+}
+
+#' Fix Else Placement
+#'
+#' Ensures `else` appears on the same line as the closing brace:
+#' \preformatted{
+#' }
+#' else {
+#' }
+#' becomes `} else {`.
+#'
+#' @param code Code string.
+#' @return Code with corrected else placement.
+#' @keywords internal
+fix_else_placement <- function(code) {
+    gsub("\\}\\s*\n\\s*else\\b", "} else", code)
+}
+
+#' Add Braces to One-Liner Control Flow
+#'
+#' Adds braces to single-statement `if`, `for`, `while` bodies:
+#' `if (x) y` becomes `if (x) { y }`.
+#' Does not modify `if`/`else` used as expressions (value-producing).
+#'
+#' @param code Code string.
+#' @return Code with braces added.
+#' @keywords internal
+add_control_braces <- function(code) {
+    changed <- TRUE
+    max_iterations <- 200
+
+    while (changed && max_iterations > 0) {
+        max_iterations <- max_iterations - 1
+        changed <- FALSE
+
+        result <- add_one_control_brace(code)
+        if (!is.null(result)) {
+            code <- result
+            changed <- TRUE
+        }
+    }
+
+    code
+}
+
+#' Add Braces to One Control Flow Statement
+#'
+#' @param code Code string.
+#' @return Modified code or NULL if no changes.
+#' @keywords internal
+add_one_control_brace <- function(code) {
+    parsed <- tryCatch(
+        parse(text = code, keep.source = TRUE),
+        error = function(e) NULL
+    )
+
+    if (is.null(parsed)) {
+        return(NULL)
+    }
+
+    pd <- getParseData(parsed)
+    if (is.null(pd) || nrow(pd) == 0) {
+        return(NULL)
+    }
+
+    terminals <- pd[pd$terminal,]
+    terminals <- terminals[order(terminals$line1, terminals$col1),]
+
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+
+    control_keywords <- c("IF", "FOR", "WHILE")
+
+    for (i in seq_len(nrow(terminals))) {
+        tok <- terminals[i,]
+        if (!(tok$token %in% control_keywords)) next
+
+        ctrl_line <- tok$line1
+
+        # Skip if-else used as expression (RHS of assignment)
+        if (tok$token == "IF") {
+            before <- terminals[terminals$line1 == ctrl_line &
+                terminals$col1 < tok$col1,]
+            if (nrow(before) > 0 &&
+                any(before$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
+                next
+            }
+        }
+
+        # Find the opening ( after the keyword
+        open_idx <- i + 1
+        if (open_idx > nrow(terminals)) next
+        if (terminals$token[open_idx] != "'('") next
+
+        # Find matching )
+        paren_depth <- 1
+        close_paren_idx <- open_idx + 1
+        while (close_paren_idx <= nrow(terminals) && paren_depth > 0) {
+            if (terminals$token[close_paren_idx] == "'('") {
+                paren_depth <- paren_depth + 1
+            } else if (terminals$token[close_paren_idx] == "')'") {
+                paren_depth <- paren_depth - 1
+            }
+            if (paren_depth > 0) close_paren_idx <- close_paren_idx + 1
+        }
+
+        if (close_paren_idx > nrow(terminals)) next
+
+        # Check next token after )
+        body_start_idx <- close_paren_idx + 1
+        if (body_start_idx > nrow(terminals)) next
+
+        body_start <- terminals[body_start_idx,]
+
+        # Already has braces - skip
+        if (body_start$token == "'{'") next
+
+        # Body must be on the same line as the closing paren
+        if (body_start$line1 != terminals$line1[close_paren_idx]) next
+
+        # Find end of body expression
+        body_end_idx <- body_start_idx
+        body_depth <- 0
+
+        while (body_end_idx <= nrow(terminals)) {
+            btok <- terminals[body_end_idx,]
+            if (btok$token %in% c("'('", "'['", "'[['", "'{'")) {
+                body_depth <- body_depth + 1
+            } else if (btok$token %in% c("')'", "']'", "']]'", "'}'")) {
+                body_depth <- body_depth - 1
+                if (body_depth < 0) break
+            }
+
+            if (body_depth == 0) {
+                next_idx <- body_end_idx + 1
+                if (next_idx > nrow(terminals)) break
+
+                next_tok <- terminals[next_idx,]
+                if (next_tok$token == "ELSE") break
+
+                if (next_tok$line1 > btok$line1) {
+                    cont_tokens <- c("'+'", "'-'", "'*'", "'/'", "'^'",
+                        "SPECIAL", "AND", "OR", "AND2", "OR2",
+                        "GT", "LT", "GE", "LE", "EQ", "NE",
+                        "LEFT_ASSIGN", "EQ_ASSIGN", "'~'", "','")
+                    if (!(next_tok$token %in% cont_tokens)) break
+                }
+            }
+
+            body_end_idx <- body_end_idx + 1
+        }
+
+        if (body_end_idx > nrow(terminals)) {
+            body_end_idx <- nrow(terminals)
+        }
+
+        body_tokens <- terminals[body_start_idx:body_end_idx,]
+        body_text <- format_line_tokens(body_tokens)
+
+        has_else <- FALSE
+        else_idx <- body_end_idx + 1
+        if (else_idx <= nrow(terminals) && terminals$token[else_idx] == "ELSE") {
+            has_else <- TRUE
+        }
+
+        # Build prefix: everything up to and including )
+        close_paren_col <- terminals$col2[close_paren_idx]
+        ctrl_line_content <- lines[ctrl_line]
+        prefix <- substring(ctrl_line_content, 1, close_paren_col)
+
+        if (has_else) {
+            else_tok <- terminals[else_idx,]
+            else_body_idx <- else_idx + 1
+            if (else_body_idx > nrow(terminals)) next
+
+            else_body_start <- terminals[else_body_idx,]
+
+            if (else_body_start$token == "'{'") {
+                new_line <- paste0(prefix, " { ", body_text, " } else {")
+                else_body_line <- else_body_start$line1
+                new_code_lines <- c(
+                    if (ctrl_line > 1) lines[seq_len(ctrl_line - 1)] else character(0),
+                    new_line,
+                    if (else_body_line < length(lines)) lines[seq(else_body_line + 1, length(lines))] else character(0)
+                )
+            } else if (else_body_start$token == "IF") {
+                new_line <- paste0(prefix, " { ", body_text, " } else")
+                new_code_lines <- c(
+                    if (ctrl_line > 1) lines[seq_len(ctrl_line - 1)] else character(0),
+                    new_line,
+                    if (else_tok$line1 < length(lines)) lines[seq(else_tok$line1 + 1, length(lines))] else character(0)
+                )
+            } else {
+                # Both branches bare
+                else_end_idx <- else_body_idx
+                else_depth <- 0
+                while (else_end_idx <= nrow(terminals)) {
+                    etok <- terminals[else_end_idx,]
+                    if (etok$token %in% c("'('", "'['", "'[['", "'{'")) {
+                        else_depth <- else_depth + 1
+                    } else if (etok$token %in% c("')'", "']'", "']]'", "'}'")) {
+                        else_depth <- else_depth - 1
+                        if (else_depth < 0) break
+                    }
+                    if (else_depth == 0) {
+                        next_idx2 <- else_end_idx + 1
+                        if (next_idx2 > nrow(terminals)) break
+                        if (terminals$line1[next_idx2] > etok$line1) break
+                    }
+                    else_end_idx <- else_end_idx + 1
+                }
+                if (else_end_idx > nrow(terminals)) {
+                    else_end_idx <- nrow(terminals)
+                }
+
+                else_body_tokens <- terminals[else_body_idx:else_end_idx,]
+                else_body_text <- format_line_tokens(else_body_tokens)
+                else_end_line <- terminals$line1[else_end_idx]
+
+                new_line <- paste0(prefix, " { ", body_text, " } else { ", else_body_text, " }")
+                new_code_lines <- c(
+                    if (ctrl_line > 1) lines[seq_len(ctrl_line - 1)] else character(0),
+                    new_line,
+                    if (else_end_line < length(lines)) lines[seq(else_end_line + 1, length(lines))] else character(0)
+                )
+            }
+        } else {
+            body_end_line <- terminals$line1[body_end_idx]
+            new_line <- paste0(prefix, " { ", body_text, " }")
+            new_code_lines <- c(
+                if (ctrl_line > 1) lines[seq_len(ctrl_line - 1)] else character(0),
+                new_line,
+                if (body_end_line < length(lines)) lines[seq(body_end_line + 1, length(lines))] else character(0)
+            )
+        }
+
+        result <- paste(new_code_lines, collapse = "\n")
+        if (!grepl("\n$", result) && nchar(result) > 0) {
+            result <- paste0(result, "\n")
+        }
+
+        return(result)
+    }
+
+    # add_one_control_brace: no changes
     NULL
 }

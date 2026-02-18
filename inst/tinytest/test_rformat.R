@@ -6,9 +6,10 @@ expect_equal(
   "x <- 1\n"
 )
 
+# = assignment gets converted to <-
 expect_equal(
   rformat("y=2"),
-  "y = 2\n"
+  "y <- 2\n"
 )
 
 # Operator spacing
@@ -156,4 +157,50 @@ expect_equal(
 expect_equal(
   rformat("x <- c(1, 2, 3)"),
   "x <- c(1, 2, 3)\n"
+)
+
+# = to <- conversion (named args stay as =)
+expect_equal(
+  rformat("x = 1"),
+  "x <- 1\n"
+)
+expect_equal(
+  rformat("foo(x = 1)"),
+  "foo(x = 1)\n"
+)
+
+# Braces on one-liner if
+expect_equal(
+  rformat("if (x) y"),
+  "if (x) { y }\n"
+)
+
+# Braces on one-liner if-else
+expect_equal(
+  rformat("if (x > 0) y else z"),
+  "if (x > 0) { y } else { z }\n"
+)
+
+# Braces on one-liner for
+expect_equal(
+  rformat("for (i in 1:10) print(i)"),
+  "for (i in 1:10) { print(i) }\n"
+)
+
+# Preserve if-else as expression (RHS of assignment)
+expect_equal(
+  rformat("x <- if (a) b else c"),
+  "x <- if (a) b else c\n"
+)
+
+# } else { on same line
+expect_equal(
+  rformat("if (x) {\n  y\n}\nelse {\n  z\n}"),
+  "if (x) {\n    y\n} else {\n    z\n}\n"
+)
+
+# Trailing whitespace removal
+expect_false(
+  grepl(" \n", rformat("x <- 1   \ny <- 2  ")),
+  info = "Trailing whitespace should be removed"
 )

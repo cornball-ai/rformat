@@ -25,6 +25,9 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
         stop("`code` must be a character string")
     }
 
+    # Fix } else placement before parsing (R can't parse }\nelse)
+    code <- fix_else_placement(code)
+
     formatted <- format_tokens(code, indent = indent, wrap = wrap,
         expand_if = expand_if, brace_style = brace_style)
     format_blank_lines(formatted)
