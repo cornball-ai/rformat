@@ -188,7 +188,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Collapse multi-line calls that fit on one line
     result <- collapse_calls(result)
 
-    # Wrap long function calls
+    # Wrap long lines at operators (||, &&), then at commas
+    result <- wrap_long_operators(result)
     result <- wrap_long_calls(result)
 
     # Add braces to one-liner control flow
@@ -996,10 +997,13 @@ collapse_one_call <- function(code) {
 
     lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
 
-    # Find function calls: SYMBOL_FUNCTION_CALL followed by '('
-    call_indices <- which(terminals$token == "SYMBOL_FUNCTION_CALL")
+    # Find multi-line parenthesized groups:
+    # 1. Function calls: SYMBOL_FUNCTION_CALL followed by '('
+    # 2. Control flow: IF/FOR/WHILE followed by '('
+    target_tokens <- c("SYMBOL_FUNCTION_CALL", "IF", "FOR", "WHILE")
+    target_indices <- which(terminals$token %in% target_tokens)
 
-    for (ci in call_indices) {
+    for (ci in target_indices) {
         # Next token should be '('
         open_idx <- ci + 1
         if (open_idx > nrow(terminals)) next
@@ -1023,17 +1027,17 @@ collapse_one_call <- function(code) {
 
         close_line <- terminals$line1[close_idx]
 
-        # Only process multi-line calls
+        # Only process multi-line groups
         if (close_line == open_line) next
 
-        # Skip if any token in the call is a comment
+        # Skip if any token in the group is a comment
         inner_tokens <- terminals[seq(open_idx, close_idx),]
         if (any(inner_tokens$token == "COMMENT")) next
 
-        # Skip if the call contains a FUNCTION definition
+        # Skip if the group contains a FUNCTION definition
         if (any(inner_tokens$token == "FUNCTION")) next
 
-        # Build collapsed text from tokens: func(args)
+        # Build collapsed text from tokens
         call_tokens <- terminals[seq(ci, close_idx),]
         collapsed <- format_line_tokens(call_tokens)
 
@@ -1528,5 +1532,141 @@ add_one_control_brace <- function(code) {
     }
 
     # add_one_control_brace: no changes
+    NULL
+}
+
+#' Wrap Long Lines at Operators
+#'
+#' Wraps lines exceeding the line limit at logical operators (`||`, `&&`)
+#' with continuation aligned to the first operand.
+#'
+#' @param code Formatted code string.
+#' @param line_limit Maximum line length (default 80).
+#' @return Code with wrapped long lines.
+#' @keywords internal
+wrap_long_operators <- function(code, line_limit = 80L) {
+    changed <- TRUE
+    max_iterations <- 100
+
+    while (changed && max_iterations > 0) {
+        max_iterations <- max_iterations - 1
+        changed <- FALSE
+
+        result <- wrap_one_long_operator(code, line_limit = line_limit)
+        if (!is.null(result)) {
+            code <- result
+            changed <- TRUE
+        }
+    }
+
+    code
+}
+
+#' Wrap One Long Line at an Operator
+#'
+#' Finds the first line exceeding the limit that contains a top-level
+#' logical operator and wraps there. The operator stays at the end of the
+#' first line, continuation is aligned to the first operand.
+#'
+#' @param code Code string.
+#' @param line_limit Maximum line length (default 80).
+#' @return Modified code or NULL if no changes.
+#' @keywords internal
+wrap_one_long_operator <- function(code, line_limit = 80L) {
+    parsed <- tryCatch(
+        parse(text = code, keep.source = TRUE),
+        error = function(e) NULL
+    )
+
+    if (is.null(parsed)) {
+        return(NULL)
+    }
+
+    pd <- getParseData(parsed)
+    if (is.null(pd) || nrow(pd) == 0) {
+        return(NULL)
+    }
+
+    terminals <- pd[pd$terminal,]
+    terminals <- terminals[order(terminals$line1, terminals$col1),]
+
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+
+    # Operators to break at, in priority order
+    break_ops <- c("OR2", "AND2", "OR", "AND")
+
+    for (line_num in seq_along(lines)) {
+        if (nchar(lines[line_num]) <= line_limit) next
+
+        line_toks <- terminals[terminals$line1 == line_num,]
+        if (nrow(line_toks) == 0) next
+
+        # Calculate paren depth at the start of this line
+        start_depth <- 0
+        before_toks <- terminals[terminals$line1 < line_num,]
+        for (j in seq_len(nrow(before_toks))) {
+            if (before_toks$token[j] == "'('") start_depth <- start_depth + 1
+            if (before_toks$token[j] == "')'") start_depth <- start_depth - 1
+        }
+
+        # Find the best operator to break at
+        best_break <- NULL
+        depth <- start_depth
+
+        for (j in seq_len(nrow(line_toks))) {
+            tok <- line_toks[j,]
+            if (tok$token == "'('") depth <- depth + 1
+            if (tok$token == "')'") depth <- depth - 1
+
+            # Break at operators inside the immediate context (not deeply nested)
+            if (tok$token %in% break_ops && depth <= start_depth + 1) {
+                if (tok$col2 <= line_limit) {
+                    best_break <- j
+                }
+            }
+        }
+
+        if (is.null(best_break)) next
+
+        break_tok <- line_toks[best_break,]
+
+        # First part: up to and including the operator
+        first_part <- substring(lines[line_num], 1, break_tok$col2)
+
+        # Continuation indent: align to content after opening paren
+        base_indent <- sub("^(\\s*).*", "\\1", lines[line_num])
+
+        first_tok <- line_toks[1,]
+        if (first_tok$token %in% c("IF", "WHILE", "FOR")) {
+            open_idx <- which(line_toks$token == "'('")[1]
+            if (!is.na(open_idx)) {
+                cont_indent <- strrep(" ", line_toks$col2[open_idx])
+            } else {
+                cont_indent <- paste0(base_indent, "    ")
+            }
+        } else {
+            cont_indent <- paste0(base_indent, "    ")
+        }
+
+        # Second part: rest of line, trimmed
+        rest <- substring(lines[line_num], break_tok$col2 + 1)
+        rest <- sub("^\\s+", "", rest)
+
+        new_lines <- c(first_part, paste0(cont_indent, rest))
+
+        new_code_lines <- c(
+            if (line_num > 1) lines[seq_len(line_num - 1)] else character(0),
+            new_lines,
+            if (line_num < length(lines)) lines[seq(line_num + 1, length(lines))] else character(0)
+        )
+
+        result <- paste(new_code_lines, collapse = "\n")
+        if (!grepl("\n$", result) && nchar(result) > 0) {
+            result <- paste0(result, "\n")
+        }
+
+        return(result)
+    }
+
     NULL
 }
