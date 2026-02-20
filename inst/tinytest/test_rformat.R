@@ -204,3 +204,27 @@ expect_false(
   grepl(" \n", rformat("x <- 1   \ny <- 2  ")),
   info = "Trailing whitespace should be removed"
 )
+
+# Collapse multi-line if condition, wrap at || (issue #8)
+code <- "f <- function(fn, path, vn) {
+    if (
+        fs::file_exists(fn) ||
+        fs::file_exists(fs::path_join(c(path, \"_quarto\", vn)))
+    ) {
+        TRUE
+    }
+}"
+result <- rformat(code)
+# Condition should be on 2 lines max, wrapped at ||
+cond_lines <- grep("file_exists", strsplit(result, "\n")[[1]])
+expect_equal(
+  length(cond_lines),
+  2L,
+  info = "Multi-line if condition should collapse and wrap at ||"
+)
+
+# Short if condition collapses to one line
+expect_true(
+  grepl("if \\(x > 0\\) \\{", rformat("if (\n  x > 0\n) {\n  y\n}")),
+  info = "Short if condition should collapse to one line"
+)
