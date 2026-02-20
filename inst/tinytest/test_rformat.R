@@ -285,6 +285,23 @@ expect_true(
   info = "if-else expression inside function call should not get braces"
 )
 
+# Inline if-else expansion doesn't absorb subsequent statements (regression)
+code <- "f <- function() {
+    xlevels <- if (is.numeric(xlevels)) levels(datapoints$x)[xlevels] else xlevels
+    next_statement <- 3
+}"
+result <- rformat(code, expand_if = TRUE)
+# next_statement should NOT be inside the else block
+expect_true(
+  grepl("    next_statement <- 3", result),
+  info = "Statements after inline if-else expansion should keep correct indent"
+)
+# The else block should close before the next statement
+expect_true(
+  grepl("\\}\n    next_statement", result),
+  info = "Inline if-else expansion should close else block before next statement"
+)
+
 # Double bracket [[ ]] preserved in bare if body (regression)
 code <- "if (is.null(x)) x <- lst[[\"key\"]]"
 result <- rformat(code)

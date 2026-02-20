@@ -216,10 +216,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Reformat function definitions
     result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style)
 
-    # Reformat inline if-else to multi-line (optional)
-    if (expand_if) {
-        result <- reformat_inline_if(result)
-    }
+    # Reformat inline if-else to multi-line
+    # Always expand long lines; optionally expand all
+    result <- reformat_inline_if(result, line_limit = if (expand_if) 0L else 80L)
 
     result
 }
@@ -508,7 +507,7 @@ reformat_one_function <- function(code, wrap = "paren", brace_style = "kr",
 #' @param code Formatted code string.
 #' @return Code with reformatted inline if-else.
 #' @keywords internal
-reformat_inline_if <- function(code) {
+reformat_inline_if <- function(code, line_limit = 0L) {
     changed <- TRUE
     max_iterations <- 100
 
@@ -516,7 +515,7 @@ reformat_inline_if <- function(code) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- reformat_one_inline_if(code)
+        result <- reformat_one_inline_if(code, line_limit = line_limit)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -529,9 +528,11 @@ reformat_inline_if <- function(code) {
 #' Reformat One Inline If-Else Statement
 #'
 #' @param code Code string.
+#' @param line_limit Only expand if-else on lines exceeding this limit.
+#'   Use 0 to expand all inline if-else.
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-reformat_one_inline_if <- function(code) {
+reformat_one_inline_if <- function(code, line_limit = 0L) {
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
         error = function(e) NULL
@@ -638,9 +639,9 @@ reformat_one_inline_if <- function(code) {
 
         if (is.null(else_idx)) next
 
-        # Check if this is all on one line (inline if-else)
-        else_line <- terminals$line1[else_idx]
-        if (else_line != assign_line) next
+        # Skip if-else that already has braces (already in expanded form)
+        body_first <- terminals[close_paren_idx + 1,]
+        if (body_first$token == "'{'") next
 
         # Extract true expression (between close_paren and else)
         true_tokens <- terminals[(close_paren_idx + 1) :(else_idx - 1),]
@@ -655,9 +656,21 @@ reformat_one_inline_if <- function(code) {
         false_end <- false_start
         false_paren_depth <- 0
         false_brace_depth <- 0
+        false_if_depth <- 0  # track nested if-else
+        false_start_line <- terminals$line1[false_start]
 
         while (false_end <= nrow(terminals)) {
             ftok <- terminals[false_end,]
+
+            # Track if-else nesting for chained else-if on same line only
+            # (IF tokens on subsequent lines are new statements, not part of
+            # the false expression)
+            if (ftok$token == "IF" && ftok$line1 == false_start_line) {
+                false_if_depth <- false_if_depth + 1
+            }
+            if (ftok$token == "ELSE" && ftok$line1 == false_start_line) {
+                false_if_depth <- max(0, false_if_depth - 1)
+            }
 
             # Track nesting
             prev_paren_depth <- false_paren_depth
@@ -666,13 +679,16 @@ reformat_one_inline_if <- function(code) {
             if (ftok$token == "'{'") false_brace_depth <- false_brace_depth + 1
             if (ftok$token == "'}'") false_brace_depth <- false_brace_depth - 1
 
-            # If we just closed the outermost paren/brace, include this token and stop
-            if (prev_paren_depth > 0 && false_paren_depth == 0 && false_brace_depth == 0) {
+            # If we just closed the outermost paren/brace, include this
+            # token and stop — but not inside an if-else (condition parens)
+            if (prev_paren_depth > 0 && false_paren_depth == 0 &&
+                false_brace_depth == 0 && false_if_depth == 0) {
                 break
             }
 
             # End at line break when not nested (for simple expressions)
-            if (ftok$line1 > assign_line && false_paren_depth <= 0 && false_brace_depth <= 0) {
+            if (ftok$line1 > false_start_line && false_paren_depth <= 0 &&
+                false_brace_depth <= 0 && false_if_depth == 0) {
                 false_end <- false_end - 1
                 break
             }
@@ -692,31 +708,29 @@ reformat_one_inline_if <- function(code) {
         }
         false_tokens <- terminals[false_start:false_end,]
         if (nrow(false_tokens) > 0) {
-            false_end_line <- max(false_tokens$line1)
+            false_end_line <- max(false_tokens$line2)
         } else {
             false_end_line <- assign_line
+        }
+
+        # Skip short single-line expressions when line_limit > 0
+        # Always expand multi-line inline if-else (already wrapped = hard to read)
+        spans_lines <- false_end_line > assign_line || true_end_line > assign_line
+        if (line_limit > 0L && !spans_lines &&
+            nchar(lines[assign_line]) <= line_limit) {
+            next
         }
 
         # Get base indent from current line
         current_line <- lines[assign_line]
         base_indent <- sub("^(\\s*).*", "\\1", current_line)
-        inner_indent <- paste0(base_indent, "  ")
+        inner_indent <- paste0(base_indent, "    ")
 
-        # Extract true expression - use original text if multi-line
-        if (true_end_line > assign_line) {
-            # Multi-line true expression - extract from source
-            true_text <- extract_expr_text(lines, true_tokens, inner_indent)
-        } else {
-            true_text <- format_line_tokens(true_tokens)
-        }
-
-        # Extract false expression - use original text if multi-line
-        if (false_end_line > assign_line) {
-            # Multi-line false expression - extract from source
-            false_text <- extract_expr_text(lines, false_tokens, inner_indent)
-        } else {
-            false_text <- format_line_tokens(false_tokens)
-        }
+        # Extract true and false expressions from tokens
+        # Always use format_line_tokens (not extract_expr_text) since the
+        # expression may share source lines with other parts of the if-else
+        true_text <- format_line_tokens(true_tokens)
+        false_text <- format_line_tokens(false_tokens)
 
         # Build replacement lines
         new_lines <- c(
