@@ -1507,13 +1507,14 @@ add_one_control_brace <- function(code) {
 
             if (else_body_start$token == "'{'") {
                 else_body_line <- else_body_start$line1
-                if (body_has_comment) {
-                    base_indent <- sub("^(\\s*).*", "\\1", paren_line_content)
-                    inner_indent <- paste0(base_indent, "    ")
+                new_line <- paste0(prefix, " { ", body_text, " } else {")
+                if (body_has_comment || nchar(new_line) > 80L) {
+                    ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
+                    inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(
                         paste0(prefix, " {"),
                         paste0(inner_indent, body_text),
-                        paste0(base_indent, "} else {")
+                        paste0(ctrl_indent, "} else {")
                     )
                     new_code_lines <- c(
                         pre_lines,
@@ -1521,7 +1522,6 @@ add_one_control_brace <- function(code) {
                         if (else_body_line < length(lines)) lines[seq(else_body_line + 1, length(lines))] else character(0)
                     )
                 } else {
-                    new_line <- paste0(prefix, " { ", body_text, " } else {")
                     new_code_lines <- c(
                         pre_lines,
                         new_line,
@@ -1529,13 +1529,14 @@ add_one_control_brace <- function(code) {
                     )
                 }
             } else if (else_body_start$token == "IF") {
-                if (body_has_comment) {
-                    base_indent <- sub("^(\\s*).*", "\\1", paren_line_content)
-                    inner_indent <- paste0(base_indent, "    ")
+                new_line <- paste0(prefix, " { ", body_text, " } else")
+                if (body_has_comment || nchar(new_line) > 80L) {
+                    ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
+                    inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(
                         paste0(prefix, " {"),
                         paste0(inner_indent, body_text),
-                        paste0(base_indent, "} else")
+                        paste0(ctrl_indent, "} else")
                     )
                     new_code_lines <- c(
                         pre_lines,
@@ -1543,7 +1544,6 @@ add_one_control_brace <- function(code) {
                         if (else_tok$line1 < length(lines)) lines[seq(else_tok$line1 + 1, length(lines))] else character(0)
                     )
                 } else {
-                    new_line <- paste0(prefix, " { ", body_text, " } else")
                     new_code_lines <- c(
                         pre_lines,
                         new_line,
@@ -1580,15 +1580,16 @@ add_one_control_brace <- function(code) {
                 else_body_text <- format_line_tokens(else_body_tokens)
                 else_end_line <- terminals$line1[else_end_idx]
 
-                if (body_has_comment || else_has_comment) {
-                    base_indent <- sub("^(\\s*).*", "\\1", paren_line_content)
-                    inner_indent <- paste0(base_indent, "    ")
+                new_line <- paste0(prefix, " { ", body_text, " } else { ", else_body_text, " }")
+                if (body_has_comment || else_has_comment || nchar(new_line) > 80L) {
+                    ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
+                    inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(
                         paste0(prefix, " {"),
                         paste0(inner_indent, body_text),
-                        paste0(base_indent, "} else {"),
+                        paste0(ctrl_indent, "} else {"),
                         paste0(inner_indent, else_body_text),
-                        paste0(base_indent, "}")
+                        paste0(ctrl_indent, "}")
                     )
                     new_code_lines <- c(
                         pre_lines,
@@ -1596,7 +1597,6 @@ add_one_control_brace <- function(code) {
                         if (else_end_line < length(lines)) lines[seq(else_end_line + 1, length(lines))] else character(0)
                     )
                 } else {
-                    new_line <- paste0(prefix, " { ", body_text, " } else { ", else_body_text, " }")
                     new_code_lines <- c(
                         pre_lines,
                         new_line,
@@ -1606,14 +1606,14 @@ add_one_control_brace <- function(code) {
             }
         } else {
             body_end_line <- terminals$line1[body_end_idx]
-            if (body_has_comment) {
-                # Comment in body: expand to multi-line to avoid # eating }
-                base_indent <- sub("^(\\s*).*", "\\1", paren_line_content)
-                inner_indent <- paste0(base_indent, "    ")
+            new_line <- paste0(prefix, " { ", body_text, " }")
+            if (body_has_comment || nchar(new_line) > 80L) {
+                ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
+                inner_indent <- paste0(ctrl_indent, "    ")
                 new_lines_vec <- c(
                     paste0(prefix, " {"),
                     paste0(inner_indent, body_text),
-                    paste0(base_indent, "}")
+                    paste0(ctrl_indent, "}")
                 )
                 new_code_lines <- c(
                     pre_lines,
@@ -1621,7 +1621,6 @@ add_one_control_brace <- function(code) {
                     if (body_end_line < length(lines)) lines[seq(body_end_line + 1, length(lines))] else character(0)
                 )
             } else {
-                new_line <- paste0(prefix, " { ", body_text, " }")
                 new_code_lines <- c(
                     pre_lines,
                     new_line,

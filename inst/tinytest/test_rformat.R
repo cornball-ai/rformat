@@ -231,7 +231,7 @@ expect_true(
   info = "Multi-line condition should not lose content when adding braces"
 )
 expect_true(
-  grepl("\\{ stop\\(", result),
+  grepl("\\{", result) && grepl("stop\\(", result),
   info = "Bare body after multi-line condition should get braces"
 )
 
