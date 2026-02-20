@@ -10,7 +10,8 @@ rformat_file(
   indent = 4L,
   wrap = "paren",
   expand_if = FALSE,
-  brace_style = "kr"
+  brace_style = "kr",
+  line_limit = 80L
 )
 }
 \arguments{
@@ -30,6 +31,8 @@ character string for literal indent (e.g., `"\\t\\t"` for vintage R Core style).
 
 \item{brace_style}{Brace placement for function definitions: `"kr"` (default)
 puts opening brace on same line as `) \{`, `"allman"` puts it on a new line.}
+
+\item{line_limit}{Maximum line length before wrapping (default 80).}
 }
 \value{
 Invisibly returns formatted code.

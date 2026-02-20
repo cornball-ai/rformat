@@ -223,8 +223,89 @@ expect_equal(
   info = "Multi-line if condition should collapse and wrap at ||"
 )
 
+# Multi-line condition with bare body (regression: add_control_braces corruption)
+code <- "if (!is.numeric(breaks) || !is.finite(breaks) || breaks < 1L) stop(\"invalid\")"
+result <- rformat(code)
+expect_true(
+  grepl("is.numeric\\(breaks\\)", result),
+  info = "Multi-line condition should not lose content when adding braces"
+)
+expect_true(
+  grepl("\\{", result) && grepl("stop\\(", result),
+  info = "Bare body after multi-line condition should get braces"
+)
+
 # Short if condition collapses to one line
 expect_true(
   grepl("if \\(x > 0\\) \\{", rformat("if (\n  x > 0\n) {\n  y\n}")),
   info = "Short if condition should collapse to one line"
+)
+
+# Brace body inside open paren: Map(function() { ... })
+code <- "Map(function(x) {\n    x + 1\n}, xs)"
+result <- rformat(code)
+expect_true(
+  grepl("\n    x \\+ 1\n", result),
+  info = "Map(function() { body }) should indent body 1 level, not 2"
+)
+
+# Brace body inside open paren: tryCatch({ ... })
+code <- "tryCatch({\n    x + 1\n}, error = function(e) NULL)"
+result <- rformat(code)
+expect_true(
+  grepl("\n    x \\+ 1\n", result),
+  info = "tryCatch({ body }) should indent body 1 level, not 2"
+)
+
+# Nested: brace-inside-paren with multiple body lines
+code <- "lapply(x, function(i) {\n    a <- 1\n    b <- 2\n})"
+result <- rformat(code)
+expect_true(
+  grepl("\n    a <- 1\n    b <- 2\n", result),
+  info = "Multiple body lines inside brace-in-paren should indent 1 level"
+)
+
+# Bare if body with trailing comment expands to multi-line (regression)
+code <- "if (x) y # comment"
+result <- rformat(code)
+expect_true(
+  grepl("\\{\n", result),
+  info = "Bare body with trailing comment should expand to multi-line braces"
+)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Bare body with trailing comment should produce valid R code"
+)
+
+# if-else expression inside function call stays unbraced (regression)
+code <- "foo(if (x) 1 else 2, y)"
+result <- rformat(code)
+expect_true(
+  grepl("if \\(x\\) 1 else 2", result),
+  info = "if-else expression inside function call should not get braces"
+)
+
+# Inline if-else expansion doesn't absorb subsequent statements (regression)
+code <- "f <- function() {
+    xlevels <- if (is.numeric(xlevels)) levels(datapoints$x)[xlevels] else xlevels
+    next_statement <- 3
+}"
+result <- rformat(code, expand_if = TRUE)
+# next_statement should NOT be inside the else block
+expect_true(
+  grepl("    next_statement <- 3", result),
+  info = "Statements after inline if-else expansion should keep correct indent"
+)
+# The else block should close before the next statement
+expect_true(
+  grepl("\\}\n    next_statement", result),
+  info = "Inline if-else expansion should close else block before next statement"
+)
+
+# Double bracket [[ ]] preserved in bare if body (regression)
+code <- "if (is.null(x)) x <- lst[[\"key\"]]"
+result <- rformat(code)
+expect_true(
+  grepl('\\[\\["key"\\]\\]', result),
+  info = "Double brackets should be preserved when adding control braces"
 )

@@ -3,7 +3,12 @@
 \alias{reformat_function_defs}
 \title{Reformat Function Definitions}
 \usage{
-reformat_function_defs(code, wrap = "paren", brace_style = "kr")
+reformat_function_defs(
+  code,
+  wrap = "paren",
+  brace_style = "kr",
+  line_limit = 80L
+)
 }
 \arguments{
 \item{code}{Formatted code string.}
@@ -11,6 +16,8 @@ reformat_function_defs(code, wrap = "paren", brace_style = "kr")
 \item{wrap}{Continuation style: `"paren"` or `"fixed"`.}
 
 \item{brace_style}{Brace placement: `"kr"` (same line) or `"allman"` (new line).}
+
+\item{line_limit}{Maximum line length before wrapping (default 80).}
 }
 \value{
 Code with reformatted function definitions.

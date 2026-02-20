@@ -3,7 +3,7 @@
 \alias{reformat_inline_if}
 \title{Reformat Inline If-Else Statements}
 \usage{
-reformat_inline_if(code)
+reformat_inline_if(code, line_limit = 0L)
 }
 \arguments{
 \item{code}{Formatted code string.}
