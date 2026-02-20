@@ -371,6 +371,18 @@ expect_true(
   info = "if-else inside c() should not be expanded"
 )
 
+# Don't collapse calls containing braces (regression: brace body collapse)
+code <- "tryCatch({\n    x + 1\n    y + 2\n}, error = function(e) NULL)"
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Calls containing braces should not be collapsed into one line"
+)
+expect_true(
+  grepl("\n", sub("\n$", "", result)),
+  info = "Calls containing braces should stay multi-line"
+)
+
 # Operator wrap aligns to enclosing bracket (regression: dogfooding bugs 6&7)
 code <- "terminals[some_long_condition & another_long_condition & yet_another_condition & one_more_thing,]"
 result <- rformat(code)

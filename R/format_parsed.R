@@ -1179,8 +1179,9 @@ collapse_one_call <- function (code) {
         inner_tokens <- terminals[seq(open_idx, close_idx),]
         if (any(inner_tokens$token == "COMMENT")) { next }
 
-        # Skip if the group contains a FUNCTION definition
+        # Skip if the group contains a FUNCTION definition or braces
         if (any(inner_tokens$token == "FUNCTION")) { next }
+        if (any(inner_tokens$token == "'{'")) { next }
 
         # Build collapsed text from tokens
         call_tokens <- terminals[seq(ci, close_idx),]
