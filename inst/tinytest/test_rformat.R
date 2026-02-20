@@ -264,3 +264,31 @@ expect_true(
   grepl("\n    a <- 1\n    b <- 2\n", result),
   info = "Multiple body lines inside brace-in-paren should indent 1 level"
 )
+
+# Bare if body with trailing comment expands to multi-line (regression)
+code <- "if (x) y # comment"
+result <- rformat(code)
+expect_true(
+  grepl("\\{\n", result),
+  info = "Bare body with trailing comment should expand to multi-line braces"
+)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Bare body with trailing comment should produce valid R code"
+)
+
+# if-else expression inside function call stays unbraced (regression)
+code <- "foo(if (x) 1 else 2, y)"
+result <- rformat(code)
+expect_true(
+  grepl("if \\(x\\) 1 else 2", result),
+  info = "if-else expression inside function call should not get braces"
+)
+
+# Double bracket [[ ]] preserved in bare if body (regression)
+code <- "if (is.null(x)) x <- lst[[\"key\"]]"
+result <- rformat(code)
+expect_true(
+  grepl('\\[\\["key"\\]\\]', result),
+  info = "Double brackets should be preserved when adding control braces"
+)
