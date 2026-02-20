@@ -2,8 +2,9 @@ Package: rformat
 Type: Package
 Title: Base R Code Formatter
 Version: 0.1.0
-Authors@R: person("Troy", "Hernandez", role = c("aut", "cre"),
-                  email = "troy@cornball.ai")
+Authors@R: c(person("Troy", "Hernandez", role = c("aut", "cre"),
+                    email = "troy@cornball.ai"),
+             person("Dirk", "Eddelbuettel", role = "ctb"))
 Description: A minimal R code formatter following base R style conventions.
     Formats R code with consistent spacing, indentation, and structure.
 License: GPL-3
