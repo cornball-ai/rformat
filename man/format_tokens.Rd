@@ -8,7 +8,8 @@ format_tokens(
   indent = 4L,
   wrap = "paren",
   expand_if = FALSE,
-  brace_style = "kr"
+  brace_style = "kr",
+  line_limit = 80L
 )
 }
 \arguments{
@@ -23,6 +24,8 @@ parenthesis, `"fixed"` uses 8-space indent.}
 \item{expand_if}{Expand inline if-else to multi-line (default FALSE).}
 
 \item{brace_style}{Brace placement: `"kr"` (same line) or `"allman"` (new line).}
+
+\item{line_limit}{Maximum line length before wrapping (default 80).}
 }
 \value{
 Formatted code as character string.

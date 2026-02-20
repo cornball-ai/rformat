@@ -10,6 +10,7 @@
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Formatted code as a character string.
 #' @export
 #' @examples
@@ -20,7 +21,7 @@
 #' # Allman brace style (legacy)
 #' rformat("f <- function(x) { x }", brace_style = "allman")
 rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
-                     brace_style = "kr") {
+                     brace_style = "kr", line_limit = 80L) {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
@@ -29,7 +30,8 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
     code <- fix_else_placement(code)
 
     formatted <- format_tokens(code, indent = indent, wrap = wrap,
-        expand_if = expand_if, brace_style = brace_style)
+        expand_if = expand_if, brace_style = brace_style,
+        line_limit = line_limit)
     format_blank_lines(formatted)
 }
 
@@ -47,6 +49,7 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Invisibly returns formatted code.
 #' @export
 #' @examples
@@ -60,14 +63,16 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' readLines(f)
 #' unlink(f)
 rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
-                          wrap = "paren", expand_if = FALSE, brace_style = "kr") {
+                          wrap = "paren", expand_if = FALSE,
+                          brace_style = "kr", line_limit = 80L) {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
 
     code <- paste(readLines(path, warn = FALSE), collapse = "\n")
     formatted <- rformat(code, indent = indent, wrap = wrap,
-        expand_if = expand_if, brace_style = brace_style)
+        expand_if = expand_if, brace_style = brace_style,
+        line_limit = line_limit)
 
     if (!dry_run) {
         if (is.null(output)) {
@@ -95,6 +100,7 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Invisibly returns vector of modified file paths.
 #' @export
 #' @examples
@@ -109,7 +115,7 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' unlink(d, recursive = TRUE)
 rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
                          indent = 4L, wrap = "paren", expand_if = FALSE,
-                         brace_style = "kr") {
+                         brace_style = "kr", line_limit = 80L) {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
     }
@@ -126,7 +132,8 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
     for (f in files) {
         original <- paste(readLines(f, warn = FALSE), collapse = "\n")
         formatted <- rformat(original, indent = indent, wrap = wrap,
-            expand_if = expand_if, brace_style = brace_style)
+            expand_if = expand_if, brace_style = brace_style,
+            line_limit = line_limit)
 
         if (formatted != original) {
             modified <- c(modified, f)

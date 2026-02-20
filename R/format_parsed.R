@@ -10,11 +10,13 @@
 #'   parenthesis, `"fixed"` uses 8-space indent.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
 format_tokens <- function (code, indent = 4L, wrap = "paren",
-                           expand_if = FALSE, brace_style = "kr") {
+                           expand_if = FALSE, brace_style = "kr",
+                           line_limit = 80L) {
     # Parse with source tracking
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
@@ -207,21 +209,23 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     result <- collapse_calls(result)
 
     # Wrap long lines at operators (||, &&), then at commas
-    result <- wrap_long_operators(result)
-    result <- wrap_long_calls(result)
+    result <- wrap_long_operators(result, line_limit = line_limit)
+    result <- wrap_long_calls(result, line_limit = line_limit)
 
     # Add braces to one-liner control flow
     result <- add_control_braces(result)
 
     # Reformat function definitions
-    result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style)
+    result <- reformat_function_defs(result, wrap = wrap, brace_style = brace_style,
+        line_limit = line_limit)
 
     # Reformat inline if-else to multi-line
     # Always expand long lines; optionally expand all
-    result <- reformat_inline_if(result, line_limit = if (expand_if) 0L else 80L)
+    result <- reformat_inline_if(result,
+        line_limit = if (expand_if) 0L else line_limit)
 
     # Final wrap pass: earlier passes may have produced new long lines
-    result <- wrap_long_calls(result)
+    result <- wrap_long_calls(result, line_limit = line_limit)
 
     result
 }
@@ -236,9 +240,11 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
 #' @param code Formatted code string.
 #' @param wrap Continuation style: `"paren"` or `"fixed"`.
 #' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @return Code with reformatted function definitions.
 #' @keywords internal
-reformat_function_defs <- function(code, wrap = "paren", brace_style = "kr")
+reformat_function_defs <- function(code, wrap = "paren", brace_style = "kr",
+    line_limit = 80L)
 {
     # Process one function at a time, re-parsing each time
     # to handle line number changes
@@ -249,7 +255,8 @@ reformat_function_defs <- function(code, wrap = "paren", brace_style = "kr")
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- reformat_one_function(code, wrap = wrap, brace_style = brace_style)
+        result <- reformat_one_function(code, wrap = wrap,
+            brace_style = brace_style, line_limit = line_limit)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
