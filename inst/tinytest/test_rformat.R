@@ -223,8 +223,44 @@ expect_equal(
   info = "Multi-line if condition should collapse and wrap at ||"
 )
 
+# Multi-line condition with bare body (regression: add_control_braces corruption)
+code <- "if (!is.numeric(breaks) || !is.finite(breaks) || breaks < 1L) stop(\"invalid\")"
+result <- rformat(code)
+expect_true(
+  grepl("is.numeric\\(breaks\\)", result),
+  info = "Multi-line condition should not lose content when adding braces"
+)
+expect_true(
+  grepl("\\{ stop\\(", result),
+  info = "Bare body after multi-line condition should get braces"
+)
+
 # Short if condition collapses to one line
 expect_true(
   grepl("if \\(x > 0\\) \\{", rformat("if (\n  x > 0\n) {\n  y\n}")),
   info = "Short if condition should collapse to one line"
+)
+
+# Brace body inside open paren: Map(function() { ... })
+code <- "Map(function(x) {\n    x + 1\n}, xs)"
+result <- rformat(code)
+expect_true(
+  grepl("\n    x \\+ 1\n", result),
+  info = "Map(function() { body }) should indent body 1 level, not 2"
+)
+
+# Brace body inside open paren: tryCatch({ ... })
+code <- "tryCatch({\n    x + 1\n}, error = function(e) NULL)"
+result <- rformat(code)
+expect_true(
+  grepl("\n    x \\+ 1\n", result),
+  info = "tryCatch({ body }) should indent body 1 level, not 2"
+)
+
+# Nested: brace-inside-paren with multiple body lines
+code <- "lapply(x, function(i) {\n    a <- 1\n    b <- 2\n})"
+result <- rformat(code)
+expect_true(
+  grepl("\n    a <- 1\n    b <- 2\n", result),
+  info = "Multiple body lines inside brace-in-paren should indent 1 level"
 )
