@@ -392,8 +392,11 @@ reformat_one_function <- function(code, wrap = "paren", brace_style = "kr",
         # Build single-line signature: prefix + function (arg1, arg2, ...)
         single_line_sig <- paste0(prefix, "function (", paste(formal_texts, collapse = ", "), ")")
 
+        # Account for " {" suffix when using K&R brace style
+        sig_limit <- line_limit - if (has_brace && brace_style == "kr") 2L else 0L
+
         # Check if single line fits
-        if (nchar(single_line_sig) <= line_limit) {
+        if (nchar(single_line_sig) <= sig_limit) {
             # Single line style
             new_lines <- single_line_sig
         } else {
@@ -416,7 +419,7 @@ reformat_one_function <- function(code, wrap = "paren", brace_style = "kr",
 
                 # Would adding this arg exceed the limit?
                 test_line <- paste0(current_line, arg_with_comma)
-                if (nchar(test_line) > line_limit && nchar(current_line) > nchar(cont_indent)) {
+                if (nchar(test_line) > sig_limit && nchar(current_line) > nchar(cont_indent)) {
                     # Wrap: save current line (remove trailing space if any)
                     new_lines <- c(new_lines, sub(" $", "", current_line))
                     current_line <- paste0(cont_indent, arg_with_comma)
