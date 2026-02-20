@@ -3,12 +3,14 @@
 \alias{needs_space}
 \title{Determine If Space Needed Between Tokens}
 \usage{
-needs_space(prev, tok)
+needs_space(prev, tok, prev_prev = NULL)
 }
 \arguments{
 \item{prev}{Previous token (data frame row).}
 
 \item{tok}{Current token (data frame row).}
+
+\item{prev_prev}{Token before prev (data frame row or NULL), for unary detection.}
 }
 \value{
 Logical.

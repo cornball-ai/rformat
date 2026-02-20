@@ -309,3 +309,76 @@ expect_true(
   grepl('\\[\\["key"\\]\\]', result),
   info = "Double brackets should be preserved when adding control braces"
 )
+
+# No space before [[ (LBB token) (regression: dogfooding bug 1)
+expect_equal(
+  rformat("x <- strsplit(s, \",\")[[1]]"),
+  "x <- strsplit(s, \",\")[[1]]\n",
+  info = "No space before [[ after )"
+)
+expect_equal(
+  rformat("y <- lst[[1]][[2]]"),
+  "y <- lst[[1]][[2]]\n",
+  info = "No space before chained [["
+)
+
+# No space around : operator (regression: dogfooding bug 2)
+expect_equal(
+  rformat("x <- (a + 1):b"),
+  "x <- (a + 1):b\n",
+  info = "No space before : after )"
+)
+expect_equal(
+  rformat("x <- 1:10"),
+  "x <- 1:10\n",
+  info = "No space around : in sequence"
+)
+
+# Trailing comment keeps space (regression: dogfooding bug 4)
+expect_true(
+  grepl(" # comment", rformat("x <- 1 # comment")),
+  info = "Space preserved before trailing comment"
+)
+
+# Unary minus not spaced (regression: dogfooding bug 5)
+expect_equal(
+  rformat("x[-length(x)]"),
+  "x[-length(x)]\n",
+  info = "Unary minus after [ not spaced"
+)
+expect_equal(
+  rformat("x <- -1"),
+  "x <- -1\n",
+  info = "Unary minus after <- not spaced"
+)
+expect_equal(
+  rformat("f(-x, -y)"),
+  "f(-x, -y)\n",
+  info = "Unary minus after ( and , not spaced"
+)
+# Binary minus still spaced
+expect_equal(
+  rformat("x-y"),
+  "x - y\n",
+  info = "Binary minus still gets spaces"
+)
+
+# c(if-else) not expanded (regression: dogfooding bug 3)
+code <- "x <- c(if (a) b else d, e)"
+result <- rformat(code, expand_if = TRUE)
+expect_true(
+  grepl("c\\(if", result),
+  info = "if-else inside c() should not be expanded"
+)
+
+# Operator wrap aligns to enclosing bracket (regression: dogfooding bugs 6&7)
+code <- "terminals[some_long_condition & another_long_condition & yet_another_condition & one_more_thing,]"
+result <- rformat(code)
+result_lines <- strsplit(sub("\n$", "", result), "\n")[[1]]
+if (length(result_lines) > 1) {
+  # Continuation should align to column after [
+  expect_true(
+    grepl("^          ", result_lines[2]),
+    info = "Operator wrap continuation should align to column after ["
+  )
+}
