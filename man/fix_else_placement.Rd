@@ -12,11 +12,6 @@ fix_else_placement(code)
 Code with corrected else placement.
 }
 \description{
-Ensures `else` appears on the same line as the closing brace:
-\preformatted{
-}
-else {
-}
-becomes `} else {`.
+Ensures `else` appears on the same line as the closing brace.
 }
 \keyword{internal}

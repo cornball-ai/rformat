@@ -7,6 +7,9 @@ reformat_inline_if(code, line_limit = 0L)
 }
 \arguments{
 \item{code}{Formatted code string.}
+
+\item{line_limit}{Only expand if-else on lines exceeding this limit.
+Use 0 to expand all inline if-else.}
 }
 \value{
 Code with reformatted inline if-else.

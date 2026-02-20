@@ -553,6 +553,8 @@ reformat_one_function <- function(code, wrap = "paren", brace_style = "kr",
 #' }
 #'
 #' @param code Formatted code string.
+#' @param line_limit Only expand if-else on lines exceeding this limit.
+#'   Use 0 to expand all inline if-else.
 #' @return Code with reformatted inline if-else.
 #' @keywords internal
 reformat_inline_if <- function(code, line_limit = 0L) {
@@ -1372,12 +1374,7 @@ wrap_one_long_call <- function(code, line_limit = 80L) {
 
 #' Fix Else Placement
 #'
-#' Ensures `else` appears on the same line as the closing brace:
-#' \preformatted{
-#' }
-#' else {
-#' }
-#' becomes `} else {`.
+#' Ensures `else` appears on the same line as the closing brace.
 #'
 #' @param code Code string.
 #' @return Code with corrected else placement.

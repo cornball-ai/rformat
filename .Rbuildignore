@@ -3,7 +3,9 @@
 ^\.git$
 ^\.github$
 ^\.gitignore$
+^\.claude$
 ^CLAUDE\.md$
+^lab$
 ^man-md$
 ^fyi\.md$
 ^README\.md$
