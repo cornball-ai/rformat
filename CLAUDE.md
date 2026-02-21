@@ -104,6 +104,10 @@ if (!is.numeric(x)) {
 - 80 character limit for function signature wrapping
 - Break lines at commas
 
+## Multi-byte Characters
+
+R's `getParseData()` returns character-based column positions (`col1`, `col2`), not byte positions. This was verified experimentally — an em-dash (`—`, 3 bytes in UTF-8) still counts as 1 column. So `substring()` and `nchar()` work correctly with parse data columns. No byte-to-character conversion is needed.
+
 ## Package Development
 
 - Explicit namespaces required for external functions

@@ -371,6 +371,11 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
 
                     while (i < close_idx) {
                         vtok <- terminals[i,]
+                        # Skip comments inside formals (e.g. # type: bool)
+                        if (vtok$token == "COMMENT") {
+                            i <- i + 1
+                            next
+                        }
                         if (vtok$token == "'('") {
                             value_paren_depth <- value_paren_depth + 1
                         }
@@ -820,6 +825,14 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
         true_end_line > assign_line
         if (line_limit > 0L && !spans_lines &&
             nchar(lines[assign_line]) <= line_limit) {
+            next
+        }
+
+        # Skip chained if-else expressions (else clause starts with IF)
+        # e.g., status <- if (a) "x" else if (b) "y" else "z"
+        # These are a valid R idiom; don't expand unless user requested it
+        if (line_limit > 0L && false_start <= nrow(terminals) &&
+                                                   terminals$token[false_start] == "IF") {
             next
         }
 
@@ -1541,6 +1554,53 @@ add_one_control_brace <- function (code) {
                      any(before$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN",
                                              "RIGHT_ASSIGN"))) {
                 next
+            }
+            # If this IF is preceded by ELSE, trace back the chain
+            # to the original IF and check if it's an expression
+            if (i > 1 && terminals$token[i - 1] == "ELSE") {
+                skip_chain <- FALSE
+                chain_idx <- i - 1
+                while (chain_idx > 1 && terminals$token[chain_idx] == "ELSE") {
+                    # Find the IF that owns this ELSE by scanning backwards
+                    # past the body and condition of the preceding if
+                    scan <- chain_idx - 1
+                    depth <- 0
+                    while (scan >= 1) {
+                        st <- terminals$token[scan]
+                        if (st %in% c("')'", "']'", "'}'", "']]'")) {
+                            depth <- depth + 1
+                        } else if (st %in% c("'('", "'['", "'{'")) {
+                            depth <- depth - 1
+                        } else if (st == "LBB") {
+                            depth <- depth - 2
+                        }
+                        if (depth <= 0 && st == "IF") {
+                            break
+                        }
+                        scan <- scan - 1
+                    }
+                    if (scan < 1 || terminals$token[scan] != "IF") {
+                        break
+                    }
+                    # Check if there's an ELSE before this IF too
+                    if (scan > 1 && terminals$token[scan - 1] == "ELSE") {
+                        chain_idx <- scan - 1
+                    } else {
+                        # Found the root IF - check if it's an expression
+                        root_line <- terminals$line1[scan]
+                        root_before <- terminals[
+                        terminals$line1 == root_line &
+                        terminals$col1 < terminals$col1[scan],]
+                        if (nrow(root_before) > 0 &&
+                                 any(root_before$token %in% c("LEFT_ASSIGN",
+                                                              "EQ_ASSIGN",
+                                                              "RIGHT_ASSIGN"))) {
+                            skip_chain <- TRUE
+                        }
+                        break
+                    }
+                }
+                if (skip_chain) { next }
             }
             # Skip if-else used as function argument (inside unclosed parens)
             all_before <- terminals[seq_len(nrow(terminals)) < i,]

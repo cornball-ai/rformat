@@ -394,3 +394,19 @@ if (length(result_lines) > 1) {
     info = "Operator wrap continuation should align to column after ["
   )
 }
+
+# Chained if-else expression preserved (regression: torchlang discover.R)
+code <- "status <- if (a) \"x\" else if (b) \"y\" else \"z\""
+result <- rformat(code)
+expect_true(
+  grepl("status <- if", result),
+  info = "Chained if-else expression should not be expanded to control flow"
+)
+
+# Comments inside function formals skipped (regression: torch nnf-activation.R)
+code <- "f <- function(batch_first = FALSE, # type: bool\n              x = 1) {\n    x\n}"
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Comments inside function formals should not corrupt signature"
+)
