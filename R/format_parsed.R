@@ -41,6 +41,31 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Split original into lines for comment preservation
     orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
 
+    # Fix truncated string constants from getParseData()
+    # Long STR_CONST tokens (~1000+ chars) get truncated to
+    # '[N chars quoted with "..."]' — recover from source lines
+    for (i in seq_len(nrow(terminals))) {
+        tok <- terminals[i,]
+        if (tok$token == "STR_CONST" &&
+            grepl("^\\[\\d+ chars quoted", tok$text)) {
+            if (tok$line1 == tok$line2) {
+                terminals$text[i] <- substring(orig_lines[tok$line1],
+                    col_to_charpos(orig_lines[tok$line1], tok$col1),
+                    col_to_charpos(orig_lines[tok$line1], tok$col2))
+            } else {
+                parts <- c(
+                    substring(orig_lines[tok$line1],
+                        col_to_charpos(orig_lines[tok$line1], tok$col1)),
+                    if (tok$line2 > tok$line1 + 1) {
+                    orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
+                    },
+                    substring(orig_lines[tok$line2], 1,
+                        col_to_charpos(orig_lines[tok$line2], tok$col2)))
+                terminals$text[i] <- paste(parts, collapse = "\n")
+            }
+        }
+    }
+
     # Track nesting for indentation
     brace_depth <- 0
     paren_depth <- 0
@@ -64,9 +89,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             if (length(paren_at_brace) > 0) {
                 paren_at_brace <- paren_at_brace[-length(paren_at_brace)]
             }
-        } else if (tok$token == "'('") {
-            paren_depth <- paren_depth + 1
-        } else if (tok$token == "')'") {
+        } else if (tok$token %in% c("'('", "'['", "LBB")) {
+            paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
+        } else if (tok$token %in% c("')'", "']'")) {
             paren_depth <- max(0, paren_depth - 1)
         }
 
@@ -103,7 +128,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
                 prev_brace <- max(0, prev_brace - 1)
             }
-            if (nrow(line_tokens) > 0 && line_tokens$token[1] == "')'") {
+            if (nrow(line_tokens) > 0 &&
+                line_tokens$token[1] %in% c("')'", "']'")) {
                 prev_paren <- max(0, prev_paren - 1)
             }
 
@@ -177,9 +203,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 } else {
                     indent <- 0
                 }
-                out_lines[line_num] <- paste0(paste0(rep(indent_str, indent),
-                                                     collapse = ""),
-                                              trimws(line))
+                out_lines[line_num] <- paste0(
+                    paste0(rep(indent_str, indent), collapse = ""),
+                    trimws(line))
             }
             next
         }
@@ -191,9 +217,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         }
         formatted <- format_line_tokens(line_tokens)
 
-        out_lines[line_num] <- paste0(paste0(rep(indent_str, indent),
-                                             collapse = ""),
-                                      formatted)
+        out_lines[line_num] <- paste0(
+            paste0(rep(indent_str, indent), collapse = ""), formatted)
     }
 
     # Filter out NA lines (multi-line token continuations)
@@ -206,22 +231,22 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Collapse multi-line calls that fit on one line
     result <- collapse_calls(result)
 
+    # Add braces to one-liner control flow (before wrapping, so bare
+    # bodies move to their own lines before line-length decisions)
+    result <- add_control_braces(result)
+
     # Wrap long lines at operators (||, &&), then at commas
     result <- wrap_long_operators(result, line_limit = line_limit)
     result <- wrap_long_calls(result, line_limit = line_limit)
 
-    # Add braces to one-liner control flow
-    result <- add_control_braces(result)
-
     # Reformat function definitions
     result <- reformat_function_defs(result, wrap = wrap,
-                                     brace_style = brace_style,
-                                     line_limit = line_limit)
+        brace_style = brace_style, line_limit = line_limit)
 
     # Reformat inline if-else to multi-line
     # Always expand long lines; optionally expand all
     result <- reformat_inline_if(result,
-                                 line_limit = if (expand_if) 0L else line_limit)
+        line_limit = if (expand_if) 0L else line_limit)
 
     # Final wrap pass: earlier passes may have produced new long lines
     result <- wrap_long_calls(result, line_limit = line_limit)
@@ -254,8 +279,7 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
         changed <- FALSE
 
         result <- reformat_one_function(code, wrap = wrap,
-                                        brace_style = brace_style,
-                                        line_limit = line_limit)
+            brace_style = brace_style, line_limit = line_limit)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -344,7 +368,8 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
         base_indent <- sub("^(\\s*).*", "\\1", func_line_content)
         # func_tok$col1 is the 1-based column position of "function"
         if (func_tok$col1 > 1) {
-            prefix <- substring(func_line_content, 1, func_tok$col1 - 1)
+            prefix <- substring(func_line_content, 1,
+                col_to_charpos(func_line_content, func_tok$col1 - 1))
         } else {
             prefix <- ""
         }
@@ -394,9 +419,9 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                     # Format value tokens properly
                     if (length(value_tokens) > 0) {
                         value_df <- do.call(rbind,
-                                            lapply(value_tokens, as.data.frame))
+                            lapply(value_tokens, as.data.frame))
                         formal_text <- paste0(formal_text,
-                                              format_line_tokens(value_df))
+                            format_line_tokens(value_df))
                     }
                 }
 
@@ -408,7 +433,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
 
         # Build single-line signature: prefix + function (arg1, arg2, ...)
         single_line_sig <- paste0(prefix, "function (",
-                                  paste(formal_texts, collapse = ", "), ")")
+            paste(formal_texts, collapse = ", "), ")")
 
         # Account for " {" suffix when using K&R brace style
         if (has_brace && brace_style == "kr") {
@@ -442,7 +467,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                 # Would adding this arg exceed the limit?
                 test_line <- paste0(current_line, arg_with_comma)
                 if (nchar(test_line) > sig_limit &&
-                          nchar(current_line) > nchar(cont_indent)) {
+                    nchar(current_line) > nchar(cont_indent)) {
                     # Wrap: save current line (remove trailing space if any)
                     new_lines <- c(new_lines, sub(" $", "", current_line))
                     current_line <- paste0(cont_indent, arg_with_comma)
@@ -481,10 +506,9 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                     if (next_tok$line1 > btok$line1) {
                         # Line break at depth 0 — check for continuation
                         cont_tokens <- c("'+'", "'-'", "'*'", "'/'", "'^'",
-                                         "SPECIAL", "AND", "OR", "AND2", "OR2",
-                                         "GT", "LT", "GE", "LE", "EQ", "NE",
-                                         "LEFT_ASSIGN", "EQ_ASSIGN", "'~'",
-                                         "PIPE")
+                            "SPECIAL", "AND", "OR", "AND2", "OR2", "GT", "LT",
+                            "GE", "LE", "EQ", "NE", "LEFT_ASSIGN", "EQ_ASSIGN",
+                            "'~'", "PIPE")
                         if (!(next_tok$token %in% cont_tokens)) { break }
                     }
                 }
@@ -496,7 +520,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
             # Exclude the breaking token (comma or closing bracket)
             if (body_end_idx > close_idx + 1 ||
                 (body_end_idx == close_idx + 1 && body_depth >= 0 &&
-                 terminals$token[body_end_idx] != "','")) {
+                    terminals$token[body_end_idx] != "','")) {
                 body_tokens <- terminals[(close_idx + 1):body_end_idx,]
                 # Exclude trailing comma/close if we stopped at one
                 if (body_depth < 0 || terminals$token[body_end_idx] == "','") {
@@ -513,17 +537,18 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
             brace_tok <- terminals[close_idx + 1,]
             if (brace_style == "kr") {
                 # K&R: brace on same line as closing paren
-                new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)],
-                                                       " {")
+                new_lines[length(new_lines)] <- paste0(
+                    new_lines[length(new_lines)], " {")
             } else {
                 # Allman: brace on its own line
                 new_lines <- c(new_lines, paste0(base_indent, "{"))
             }
             # Preserve body content after { on the same line
-            brace_rest <- substring(lines[brace_tok$line1], brace_tok$col2 + 1)
+            brace_rest <- substring(lines[brace_tok$line1],
+                col_to_charpos(lines[brace_tok$line1], brace_tok$col2) + 1)
             if (nzchar(trimws(brace_rest))) {
-                new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)],
-                                                       brace_rest)
+                new_lines[length(new_lines)] <- paste0(
+                    new_lines[length(new_lines)], brace_rest)
             }
         } else if (has_inline_body) {
             # Append inline body and any suffix (e.g., ", other_args)" in outer call)
@@ -532,14 +557,13 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                 last_body_line <- terminals$line1[body_end_idx]
                 last_body_col <- terminals$col2[body_end_idx]
                 rest_of_line <- substring(lines[last_body_line],
-                                          last_body_col + 1)
+                    last_body_col + 1)
                 if (nzchar(rest_of_line)) {
                     body_suffix <- rest_of_line
                 }
             }
-            new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)],
-                                                   " ", inline_body,
-                                                   body_suffix)
+            new_lines[length(new_lines)] <- paste0(
+                new_lines[length(new_lines)], " ", inline_body, body_suffix)
         }
 
         # Check if reformatting is actually needed
@@ -685,7 +709,7 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
 
         # Get the variable being assigned (tokens before assignment)
         var_tokens <- terminals[terminals$line1 == assign_line &
-        seq_len(nrow(terminals)) < i,]
+            seq_len(nrow(terminals)) < i,]
         if (nrow(var_tokens) == 0) { next }
 
         var_name <- paste(var_tokens$text, collapse = "")
@@ -718,17 +742,26 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
         # Track nesting to find the right ELSE
         search_idx <- close_paren_idx + 1
         nest_depth <- 0
+        brace_depth <- 0
 
         while (search_idx <= nrow(terminals)) {
             stok <- terminals[search_idx,]
 
+            # Track brace boundaries — stop if we exit the enclosing block
+            if (stok$token == "'{'") {
+                brace_depth <- brace_depth + 1
+            } else if (stok$token == "'}'") {
+                brace_depth <- brace_depth - 1
+                if (brace_depth < 0) { break }
+            }
+
             if (stok$token == "IF") {
                 nest_depth <- nest_depth + 1
             } else if (stok$token == "ELSE") {
-                if (nest_depth == 0) {
+                if (nest_depth == 0 && brace_depth == 0) {
                     else_idx <- search_idx
                     break
-                } else {
+                } else if (nest_depth > 0) {
                     nest_depth <- nest_depth - 1
                 }
             }
@@ -749,6 +782,9 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
         # Need to find where the statement ends
         false_start <- else_idx + 1
         if (false_start > nrow(terminals)) { next }
+
+        # Skip braced false body — multi-statement blocks can't be inlined
+        if (terminals$token[false_start] == "'{'") { next }
 
         # Find end of false expression - could be end of line or next statement
         false_end <- false_start
@@ -832,7 +868,7 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
         # e.g., status <- if (a) "x" else if (b) "y" else "z"
         # These are a valid R idiom; don't expand unless user requested it
         if (line_limit > 0L && false_start <= nrow(terminals) &&
-                                                   terminals$token[false_start] == "IF") {
+            terminals$token[false_start] == "IF") {
             next
         }
 
@@ -849,10 +885,10 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
 
         # Build replacement lines
         new_lines <- c(paste0(base_indent, "if (", cond_text, ") {"),
-                       paste0(inner_indent, var_name, " <- ", true_text),
-                       paste0(base_indent, "} else {"),
-                       paste0(inner_indent, var_name, " <- ", false_text),
-                       paste0(base_indent, "}"))
+            paste0(inner_indent, var_name, " <- ", true_text),
+            paste0(base_indent, "} else {"),
+            paste0(inner_indent, var_name, " <- ", false_text),
+            paste0(base_indent, "}"))
 
         # Find actual end line (could span multiple lines)
         end_line <- false_end_line
@@ -935,9 +971,8 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     binary_ops <- c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB",
-                    "EQ_FORMALS", "AND", "OR", "AND2", "OR2", "GT", "LT", "GE",
-                    "LE", "EQ", "NE", "'+'", "'-'", "'*'", "'/'", "'^'",
-                    "SPECIAL", "'~'")
+        "EQ_FORMALS", "AND", "OR", "AND2", "OR2", "GT", "LT", "GE", "LE", "EQ",
+        "NE", "'+'", "'-'", "'*'", "'/'", "'^'", "SPECIAL", "'~'")
 
     if (p %in% c("'('", "'['", "LBB")) {
         return(FALSE)
@@ -981,7 +1016,7 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     if (t == "'('" && p == "FUNCTION") {
-        return(FALSE)
+        return(TRUE)
     }
 
     if (t == "'{'") {
@@ -1008,11 +1043,10 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
         }
         pp <- prev_prev$token
         unary_context <- c("'('", "'['", "LBB", "','", "'{'", "LEFT_ASSIGN",
-                           "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB", "EQ_FORMALS",
-                           "AND", "OR", "AND2", "OR2", "GT", "LT", "GE", "LE",
-                           "EQ", "NE", "'+'", "'-'", "'*'", "'/'", "'^'",
-                           "SPECIAL", "'~'", "'!'", "IF", "ELSE", "FOR",
-                           "WHILE", "REPEAT", "IN", "RETURN", "NEXT", "BREAK")
+            "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB", "EQ_FORMALS", "AND", "OR",
+            "AND2", "OR2", "GT", "LT", "GE", "LE", "EQ", "NE", "'+'", "'-'",
+            "'*'", "'/'", "'^'", "SPECIAL", "'~'", "'!'", "IF", "ELSE", "FOR",
+            "WHILE", "REPEAT", "IN", "RETURN", "NEXT", "BREAK")
         if (pp %in% unary_context) {
             return(FALSE)
         }
@@ -1031,14 +1065,66 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     symbols <- c("SYMBOL", "SYMBOL_FUNCTION_CALL", "SYMBOL_FORMALS",
-                 "SYMBOL_SUB", "SYMBOL_PACKAGE", "NUM_CONST", "STR_CONST",
-                 "NULL_CONST", "SPECIAL")
+        "SYMBOL_SUB", "SYMBOL_PACKAGE", "NUM_CONST", "STR_CONST", "NULL_CONST",
+        "SPECIAL")
 
     if (p %in% symbols && t %in% symbols) {
         return(TRUE)
     }
 
     FALSE
+}
+
+#' Convert Tab-Expanded Column to Character Position
+#'
+#' R's getParseData() reports columns with tabs expanded to 8-column tab stops.
+#' This function converts such a column back to a character position for use
+#' with substring().
+#'
+#' @param line A single line of text.
+#' @param col Tab-expanded column position (1-based).
+#' @return Character position (1-based) in the string.
+#' @keywords internal
+col_to_charpos <- function (line, col) {
+    if (!grepl("\t", line, fixed = TRUE)) {
+        return(col)
+    }
+    chars <- strsplit(line, "")[[1]]
+    display_col <- 0L
+    for (i in seq_along(chars)) {
+        if (chars[i] == "\t") {
+            display_col <- display_col + (8L - (display_col %% 8L))
+        } else {
+            display_col <- display_col + 1L
+        }
+        if (display_col >= col) {
+            return(i)
+        }
+    }
+    length(chars)
+}
+
+#' Get Tab-Expanded Line Length
+#'
+#' Returns the display width of a line, with tabs expanded to 8-column stops.
+#'
+#' @param line A single line of text.
+#' @return Display width of the line.
+#' @keywords internal
+display_width <- function (line) {
+    if (!grepl("\t", line, fixed = TRUE)) {
+        return(nchar(line))
+    }
+    chars <- strsplit(line, "")[[1]]
+    col <- 0L
+    for (ch in chars) {
+        if (ch == "\t") {
+            col <- col + (8L - (col %% 8L))
+        } else {
+            col <- col + 1L
+        }
+    }
+    col
 }
 
 #' Extract Expression Text from Source Lines
@@ -1065,7 +1151,8 @@ extract_expr_text <- function (lines, tokens, target_indent) {
     # Multi-line - extract from source
     # First line: from first token to end of line
     first_tok <- tokens[tokens$line1 == start_line,][1,]
-    first_line_text <- substring(lines[start_line], first_tok$col1)
+    first_line_text <- substring(lines[start_line],
+        col_to_charpos(lines[start_line], first_tok$col1))
 
     # Middle lines: full line content, re-indented
     result_lines <- first_line_text
@@ -1077,7 +1164,7 @@ extract_expr_text <- function (lines, tokens, target_indent) {
             trimmed <- sub("^\\s*", "", line_text)
             # Add extra indent for continuation (2 more spaces)
             result_lines <- c(result_lines,
-                              paste0("\n", target_indent, "  ", trimmed))
+                paste0("\n", target_indent, "  ", trimmed))
         }
     }
 
@@ -1211,7 +1298,8 @@ collapse_one_call <- function (code) {
         func_line <- terminals$line1[ci]
         func_col <- terminals$col1[ci]
         if (func_col > 1) {
-            prefix <- substring(lines[func_line], 1, func_col - 1)
+            prefix <- substring(lines[func_line], 1,
+                col_to_charpos(lines[func_line], func_col - 1))
         } else {
             prefix <- ""
         }
@@ -1221,7 +1309,7 @@ collapse_one_call <- function (code) {
         # Check if there are tokens after the closing paren on its line
         # that need to be appended (e.g., trailing comma, closing paren of outer call)
         after_close <- terminals[terminals$line1 == close_line &
-        terminals$col1 > terminals$col1[close_idx],]
+            terminals$col1 > terminals$col1[close_idx],]
         suffix <- ""
         if (nrow(after_close) > 0) {
             suffix <- format_line_tokens(after_close)
@@ -1238,7 +1326,7 @@ collapse_one_call <- function (code) {
         # Also check if there are tokens before the function call on func_line
         # that aren't part of the prefix (i.e., code tokens before the call)
         before_call <- terminals[terminals$line1 == func_line &
-        terminals$col1 < func_col,]
+            terminals$col1 < func_col,]
 
         # Replace the lines
         if (func_line > 1) {
@@ -1331,11 +1419,19 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         call_line <- terminals$line1[ci]
 
         # Only consider single-line calls on lines that are too long
-        if (nchar(lines[call_line]) <= line_limit) { next }
+        if (display_width(lines[call_line]) <= line_limit) { next }
 
         # Skip lines with semicolons (multiple statements on one line)
         line_toks <- terminals[terminals$line1 == call_line,]
         if (any(line_toks$token == "';'")) { next }
+
+        # Skip calls nested inside another call's parens on the same line
+        # (wrap the outermost call, not inner ones)
+        func_col <- terminals$col1[ci]
+        before <- line_toks[line_toks$col1 < func_col,]
+        paren_depth_before <- sum(before$token == "'('") -
+        sum(before$token == "')'")
+        if (paren_depth_before > 0) { next }
 
         # Find matching ')'
         paren_depth <- 1
@@ -1358,7 +1454,7 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         has_comma <- FALSE
         for (k in seq(open_idx + 1, close_idx - 1)) {
             if (terminals$token[k] == "','" &&
-                                terminals$line1[k] == call_line) {
+                terminals$line1[k] == call_line) {
                 # Check this comma is at depth 1 (not inside nested parens)
                 depth <- 0
                 for (m in seq(open_idx + 1, k)) {
@@ -1373,9 +1469,15 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         }
         if (!has_comma) { next }
 
-        # Continuation indent: align to column after opening paren
-        open_col <- terminals$col2[open_idx] # col2 of '(' is its position
-        cont_indent <- strrep(" ", open_col)
+        # Continuation indent: depth-based to match format_tokens
+        # (base_indent + 1 level for the call's (, plus levels for any
+        # unclosed [ or [[ brackets before the call on the same line)
+        base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
+        bracket_depth_before <- sum(before$token == "'['") +
+        2L * sum(before$token == "LBB") -
+        sum(before$token == "']'")
+        cont_indent <- paste0(base_indent,
+            strrep("    ", max(0, bracket_depth_before) + 1))
 
         # Collect arguments as groups of tokens between commas at depth 1
         args <- list()
@@ -1390,7 +1492,7 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
             if (tok$token == "','" && depth == 0) {
                 if (length(current_arg_tokens) > 0) {
                     arg_df <- do.call(rbind,
-                                      lapply(current_arg_tokens, as.data.frame))
+                        lapply(current_arg_tokens, as.data.frame))
                     args[[length(args) + 1]] <- format_line_tokens(arg_df)
                 }
                 current_arg_tokens <- list()
@@ -1407,9 +1509,12 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         if (length(args) < 2) { next }
 
         # Get prefix (everything before the function name)
+        # Use col_to_charpos to handle tab-expanded columns from getParseData
         func_col <- terminals$col1[ci]
+        line_content <- lines[call_line]
         if (func_col > 1) {
-            prefix <- substring(lines[call_line], 1, func_col - 1)
+            char_pos <- col_to_charpos(line_content, func_col - 1)
+            prefix <- substring(line_content, 1, char_pos)
         } else {
             prefix <- ""
         }
@@ -1418,9 +1523,9 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         # Get suffix (everything after closing paren on the same line)
         close_col <- terminals$col2[close_idx]
-        line_content <- lines[call_line]
-        if (close_col < nchar(line_content)) {
-            suffix <- substring(line_content, close_col + 1)
+        char_pos_close <- col_to_charpos(line_content, close_col)
+        if (char_pos_close < nchar(line_content)) {
+            suffix <- substring(line_content, char_pos_close + 1)
         } else {
             suffix <- ""
         }
@@ -1438,7 +1543,7 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
             test_line <- paste0(current_line, arg_text)
             if (nchar(test_line) > line_limit &&
-                      nchar(current_line) > nchar(cont_indent)) {
+                nchar(current_line) > nchar(cont_indent)) {
                 new_lines <- c(new_lines, sub(" $", "", current_line))
                 current_line <- paste0(cont_indent, arg_text)
             } else {
@@ -1549,10 +1654,9 @@ add_one_control_brace <- function (code) {
         # Skip if-else used as expression (RHS of assignment or function arg)
         if (tok$token == "IF") {
             before <- terminals[terminals$line1 == ctrl_line &
-            terminals$col1 < tok$col1,]
+                terminals$col1 < tok$col1,]
             if (nrow(before) > 0 &&
-                     any(before$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN",
-                                             "RIGHT_ASSIGN"))) {
+                any(before$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
                 next
             }
             # If this IF is preceded by ELSE, trace back the chain
@@ -1589,12 +1693,10 @@ add_one_control_brace <- function (code) {
                         # Found the root IF - check if it's an expression
                         root_line <- terminals$line1[scan]
                         root_before <- terminals[
-                        terminals$line1 == root_line &
-                        terminals$col1 < terminals$col1[scan],]
+                            terminals$line1 == root_line &
+                            terminals$col1 < terminals$col1[scan],]
                         if (nrow(root_before) > 0 &&
-                                 any(root_before$token %in% c("LEFT_ASSIGN",
-                                                              "EQ_ASSIGN",
-                                                              "RIGHT_ASSIGN"))) {
+                            any(root_before$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
                             skip_chain <- TRUE
                         }
                         break
@@ -1639,13 +1741,29 @@ add_one_control_brace <- function (code) {
         body_start_idx <- close_paren_idx + 1
         if (body_start_idx > nrow(terminals)) { next }
 
+        # Skip trailing comments on the condition line
+        # e.g. if (cond) # comment\n    body
+        cond_comment <- NULL
+        if (terminals$token[body_start_idx] == "COMMENT" &&
+            terminals$line1[body_start_idx] == terminals$line1[close_paren_idx]) {
+            cond_comment <- terminals$text[body_start_idx]
+            body_start_idx <- body_start_idx + 1
+            if (body_start_idx > nrow(terminals)) { next }
+        }
+
         body_start <- terminals[body_start_idx,]
 
         # Already has braces - skip
         if (body_start$token == "'{'") { next }
 
-        # Body must be on the same line as the closing paren
-        if (body_start$line1 != terminals$line1[close_paren_idx]) { next }
+        # Body must be on the same line as closing paren (or next line
+        # if there was a comment)
+        if (is.null(cond_comment)) {
+            if (body_start$line1 != terminals$line1[close_paren_idx]) { next }
+        } else {
+            # With trailing comment, body should be on the next line(s)
+            if (body_start$line1 <= terminals$line1[close_paren_idx]) { next }
+        }
 
         # Find end of body expression
         body_end_idx <- body_start_idx
@@ -1671,9 +1789,9 @@ add_one_control_brace <- function (code) {
 
                 if (next_tok$line1 > btok$line1) {
                     cont_tokens <- c("'+'", "'-'", "'*'", "'/'", "'^'",
-                                     "SPECIAL", "AND", "OR", "AND2", "OR2",
-                                     "GT", "LT", "GE", "LE", "EQ", "NE",
-                                     "LEFT_ASSIGN", "EQ_ASSIGN", "'~'", "','")
+                        "SPECIAL", "AND", "OR", "AND2", "OR2", "GT", "LT",
+                        "GE", "LE", "EQ", "NE", "LEFT_ASSIGN", "EQ_ASSIGN",
+                        "'~'", "','")
                     if (!(next_tok$token %in% cont_tokens)) { break }
                 }
             }
@@ -1689,10 +1807,21 @@ add_one_control_brace <- function (code) {
         body_has_comment <- any(body_tokens$token == "COMMENT")
         body_text <- format_line_tokens(body_tokens)
 
+        # If there was a trailing comment on the condition line,
+        # force multi-line and build the opening brace with comment
+        if (!is.null(cond_comment)) {
+            body_has_comment <- TRUE
+        }
+        open_brace_suffix <- if (!is.null(cond_comment)) {
+            paste0(" { ", cond_comment)
+        } else {
+            " {"
+        }
+
         has_else <- FALSE
         else_idx <- body_end_idx + 1
         if (else_idx <= nrow(terminals) &&
-                             terminals$token[else_idx] == "ELSE") {
+            terminals$token[else_idx] == "ELSE") {
             has_else <- TRUE
         }
 
@@ -1701,7 +1830,8 @@ add_one_control_brace <- function (code) {
         close_paren_line <- terminals$line1[close_paren_idx]
         close_paren_col <- terminals$col2[close_paren_idx]
         paren_line_content <- lines[close_paren_line]
-        prefix <- substring(paren_line_content, 1, close_paren_col)
+        prefix <- substring(paren_line_content, 1,
+            col_to_charpos(paren_line_content, close_paren_col))
 
         # Lines before the close paren line (for multi-line conditions)
         if (ctrl_line > 1) {
@@ -1726,16 +1856,18 @@ add_one_control_brace <- function (code) {
                 if (body_has_comment || nchar(new_line) > 80L) {
                     ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                     inner_indent <- paste0(ctrl_indent, "    ")
-                    new_lines_vec <- c(paste0(prefix, " {"),
-                                       paste0(inner_indent, body_text),
-                                       paste0(ctrl_indent, "} else {"))
+                    new_lines_vec <- c(paste0(prefix, open_brace_suffix),
+                        paste0(inner_indent, body_text),
+                        paste0(ctrl_indent, "} else {"))
                     new_code_lines <- c(pre_lines, new_lines_vec,
-                                        if (else_body_line < length(lines)) lines[seq(else_body_line + 1,
-                                                                                      length(lines))] else character(0))
+                        if (else_body_line < length(lines)) lines[seq(
+                                else_body_line + 1,
+                                length(lines))] else character(0))
                 } else {
                     new_code_lines <- c(pre_lines, new_line,
-                                        if (else_body_line < length(lines)) lines[seq(else_body_line + 1,
-                                                                                      length(lines))] else character(0))
+                        if (else_body_line < length(lines)) lines[seq(
+                                else_body_line + 1,
+                                length(lines))] else character(0))
                 }
             } else if (else_body_start$token == "IF") {
                 new_line <- paste0(prefix, " { ", body_text, " } else")
@@ -1743,20 +1875,21 @@ add_one_control_brace <- function (code) {
                 # the "if ..." part from the IF token's column onward
                 ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                 if_rest <- paste0(ctrl_indent,
-                                  trimws(substring(lines[else_body_start$line1],
-                                                   else_body_start$col1)))
+                    trimws(substring(lines[else_body_start$line1], else_body_start$col1)))
                 if (body_has_comment || nchar(new_line) > 80L) {
                     inner_indent <- paste0(ctrl_indent, "    ")
-                    new_lines_vec <- c(paste0(prefix, " {"),
-                                       paste0(inner_indent, body_text),
-                                       paste0(ctrl_indent, "} else"))
+                    new_lines_vec <- c(paste0(prefix, open_brace_suffix),
+                        paste0(inner_indent, body_text),
+                        paste0(ctrl_indent, "} else"))
                     new_code_lines <- c(pre_lines, new_lines_vec, if_rest,
-                                        if (else_body_start$line1 < length(lines)) lines[seq(else_body_start$line1 + 1,
-                                                                                             length(lines))] else character(0))
+                        if (else_body_start$line1 < length(lines)) lines[seq(
+                                else_body_start$line1 + 1,
+                                length(lines))] else character(0))
                 } else {
                     new_code_lines <- c(pre_lines, new_line, if_rest,
-                                        if (else_body_start$line1 < length(lines)) lines[seq(else_body_start$line1 + 1,
-                                                                                             length(lines))] else character(0))
+                        if (else_body_start$line1 < length(lines)) lines[seq(
+                                else_body_start$line1 + 1,
+                                length(lines))] else character(0))
                 }
             } else {
                 # Both branches bare
@@ -1789,23 +1922,25 @@ add_one_control_brace <- function (code) {
                 else_end_line <- terminals$line1[else_end_idx]
 
                 new_line <- paste0(prefix, " { ", body_text, " } else { ",
-                                   else_body_text, " }")
+                    else_body_text, " }")
                 if (body_has_comment || else_has_comment ||
                     nchar(new_line) > 80L) {
                     ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                     inner_indent <- paste0(ctrl_indent, "    ")
-                    new_lines_vec <- c(paste0(prefix, " {"),
-                                       paste0(inner_indent, body_text),
-                                       paste0(ctrl_indent, "} else {"),
-                                       paste0(inner_indent, else_body_text),
-                                       paste0(ctrl_indent, "}"))
+                    new_lines_vec <- c(paste0(prefix, open_brace_suffix),
+                        paste0(inner_indent, body_text),
+                        paste0(ctrl_indent, "} else {"),
+                        paste0(inner_indent, else_body_text),
+                        paste0(ctrl_indent, "}"))
                     new_code_lines <- c(pre_lines, new_lines_vec,
-                                        if (else_end_line < length(lines)) lines[seq(else_end_line + 1,
-                                                                                     length(lines))] else character(0))
+                        if (else_end_line < length(lines)) lines[seq(
+                                else_end_line + 1,
+                                length(lines))] else character(0))
                 } else {
                     new_code_lines <- c(pre_lines, new_line,
-                                        if (else_end_line < length(lines)) lines[seq(else_end_line + 1,
-                                                                                     length(lines))] else character(0))
+                        if (else_end_line < length(lines)) lines[seq(
+                                else_end_line + 1,
+                                length(lines))] else character(0))
                 }
             }
         } else {
@@ -1814,16 +1949,17 @@ add_one_control_brace <- function (code) {
             if (body_has_comment || nchar(new_line) > 80L) {
                 ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                 inner_indent <- paste0(ctrl_indent, "    ")
-                new_lines_vec <- c(paste0(prefix, " {"),
-                                   paste0(inner_indent, body_text),
-                                   paste0(ctrl_indent, "}"))
+                new_lines_vec <- c(paste0(prefix, open_brace_suffix),
+                    paste0(inner_indent, body_text), paste0(ctrl_indent, "}"))
                 new_code_lines <- c(pre_lines, new_lines_vec,
-                                    if (body_end_line < length(lines)) lines[seq(body_end_line + 1,
-                                                                                 length(lines))] else character(0))
+                    if (body_end_line < length(lines)) lines[seq(
+                            body_end_line + 1,
+                            length(lines))] else character(0))
             } else {
                 new_code_lines <- c(pre_lines, new_line,
-                                    if (body_end_line < length(lines)) lines[seq(body_end_line + 1,
-                                                                                 length(lines))] else character(0))
+                    if (body_end_line < length(lines)) lines[seq(
+                            body_end_line + 1,
+                            length(lines))] else character(0))
             }
         }
 
@@ -1900,7 +2036,7 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
     break_ops <- c("OR2", "AND2", "OR", "AND")
 
     for (line_num in seq_along(lines)) {
-        if (nchar(lines[line_num]) <= line_limit) { next }
+        if (display_width(lines[line_num]) <= line_limit) { next }
 
         line_toks <- terminals[terminals$line1 == line_num,]
         if (nrow(line_toks) == 0) { next }
@@ -1942,50 +2078,31 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
         break_tok <- line_toks[best_break,]
 
         # First part: up to and including the operator
-        first_part <- substring(lines[line_num], 1, break_tok$col2)
+        first_part <- substring(lines[line_num], 1,
+            col_to_charpos(lines[line_num], break_tok$col2))
 
-        # Continuation indent: align to column after innermost enclosing ( or [
+        # Continuation indent: depth-based to match format_tokens
+        # (base_indent already reflects brace/paren depth from format_tokens;
+        # add one indent level per unclosed bracket on this line before the break)
         base_indent <- sub("^(\\s*).*", "\\1", lines[line_num])
 
-        # Find innermost open ( or [ before the break point on this line
-        bracket_col <- NA
         bracket_depth <- 0
         for (j in seq_len(nrow(line_toks))) {
             tok_j <- line_toks[j,]
             if (tok_j$col1 > break_tok$col1) { break }
             if (tok_j$token %in% c("'('", "'['")) {
                 bracket_depth <- bracket_depth + 1
-                bracket_col <- tok_j$col2
             } else if (tok_j$token %in% c("')'", "']'")) {
                 bracket_depth <- bracket_depth - 1
             }
         }
 
-        # Also account for brackets opened on prior lines
-        if (is.na(bracket_col) && start_depth > 0) {
-            # Find the last unclosed ( or [ from prior lines
-            prior_depth <- 0
-            for (j in seq_len(nrow(before_toks))) {
-                btj <- before_toks[j,]
-                if (btj$token %in% c("'('", "'['")) {
-                    prior_depth <- prior_depth + 1
-                    if (prior_depth == start_depth) {
-                        bracket_col <- btj$col2
-                    }
-                } else if (btj$token %in% c("')'", "']'")) {
-                    prior_depth <- prior_depth - 1
-                }
-            }
-        }
-
-        if (!is.na(bracket_col) && bracket_depth > 0) {
-            cont_indent <- strrep(" ", bracket_col)
-        } else {
-            cont_indent <- paste0(base_indent, "    ")
-        }
+        cont_indent <- paste0(base_indent,
+            strrep("    ", max(0, bracket_depth)))
 
         # Second part: rest of line, trimmed
-        rest <- substring(lines[line_num], break_tok$col2 + 1)
+        rest <- substring(lines[line_num],
+            col_to_charpos(lines[line_num], break_tok$col2) + 1)
         rest <- sub("^\\s+", "", rest)
 
         new_lines <- c(first_part, paste0(cont_indent, rest))

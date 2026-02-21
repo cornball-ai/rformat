@@ -141,16 +141,16 @@ expect_true(
   info = "Calls with function defs should stay multi-line"
 )
 
-# Wrap long function calls at commas with paren alignment
+# Wrap long function calls at commas with depth-based continuation
 expect_equal(
   rformat("x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e, very_long_f)"),
-  "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e,\n       very_long_f)\n"
+  "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e,\n    very_long_f)\n"
 )
 
 # Wrap long named-arg calls
 expect_equal(
   rformat("result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5, zeta = 6, eta = 7)"),
-  "result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5,\n               zeta = 6, eta = 7)\n"
+  "result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5,\n    zeta = 6, eta = 7)\n"
 )
 
 # Short calls stay on one line
@@ -383,15 +383,15 @@ expect_true(
   info = "Calls containing braces should stay multi-line"
 )
 
-# Operator wrap aligns to enclosing bracket (regression: dogfooding bugs 6&7)
+# Operator wrap uses depth-based continuation indent (idempotent)
 code <- "terminals[some_long_condition & another_long_condition & yet_another_condition & one_more_thing,]"
 result <- rformat(code)
 result_lines <- strsplit(sub("\n$", "", result), "\n")[[1]]
 if (length(result_lines) > 1) {
-  # Continuation should align to column after [
+  # Continuation should be one indent level deeper (inside [)
   expect_true(
-    grepl("^          ", result_lines[2]),
-    info = "Operator wrap continuation should align to column after ["
+    grepl("^    ", result_lines[2]),
+    info = "Operator wrap continuation should be indented one level inside ["
   )
 }
 
@@ -409,4 +409,100 @@ result <- rformat(code)
 expect_true(
   !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
   info = "Comments inside function formals should not corrupt signature"
+)
+
+# Nested call wrapping doesn't corrupt multiline strings (regression: Rcpp)
+code <- "sprintf(\"hello\\n%s\\n\\t\\t}\", paste(sprintf(\"item %s\", names(x), names(x)), collapse = \"\\n\"))"
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Nested calls with multiline strings should not corrupt code"
+)
+
+# Trailing comment between if-condition and body (regression: Rcpp)
+# Note: else on new line only parses inside braces
+code <- "{\nif (!x) # eval now\n    stop(\"error\")\nelse {\n    y\n}\n}"
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Comment between if-condition and body should produce valid code"
+)
+expect_true(
+  grepl("# eval now", result),
+  info = "Comment between if-condition and body should be preserved"
+)
+
+# --- Idempotency tests ---
+# Formatting the same code twice should produce identical output
+
+# Simple assignment + operator wrap
+code <- "f <- function() {\n    deemphasise <- deemphasise || !is_string(data$node_type[[num_root]], \"main\")\n}"
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(r1, r2, info = "Operator wrap should be idempotent")
+
+# Function call wrap
+code <- "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e, very_long_f)"
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(r1, r2, info = "Function call wrap should be idempotent")
+
+# Operator inside brackets
+code <- "terminals[some_long_condition & another_long_condition & yet_another_condition & one_more_thing,]"
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(r1, r2, info = "Operator wrap inside brackets should be idempotent")
+
+# Bare if with long condition + body
+code <- "if (inherits(module, \"DLLInfo\") && missing(mustStart)) mustStart <- TRUE\t\t\t\t\t\t# nocov"
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(r1, r2, info = "Brace addition + operator wrap should be idempotent")
+
+# Anonymous function gets space: function (x)
+expect_true(
+  grepl("function \\(x\\)", rformat("sapply(xs, function(x) x + 1)")),
+  info = "Anonymous functions should get space before ("
+)
+
+# --- Bug A: Long string truncation ---
+# STR_CONST tokens >1000 chars get truncated by getParseData();
+# rformat should recover original text from source lines
+long_str <- paste0('"', paste(rep("x", 1200), collapse = ""), '"')
+code <- paste0("x <- ", long_str)
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Long string constants should parse after formatting"
+)
+expect_true(
+  grepl(substring(long_str, 1, 50), result, fixed = TRUE),
+  info = "Long string content should be preserved, not truncated"
+)
+
+# --- Bug B: ELSE search crosses brace boundaries ---
+# Inner `x <- if (cond) value` inside `if (outer) { ... } else { ... }`
+# should NOT find the outer else
+code <- "if (outer) {\n    space <- if (cond) padding\n    use(space)\n} else {\n    other()\n}"
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "ELSE search should not cross brace boundaries"
+)
+expect_true(
+  grepl("use\\(space\\)", result),
+  info = "Statement after inner if should be preserved"
+)
+
+# --- Bug C: Braced false body not collapsed ---
+# x <- if (cond) a else { stmt1; stmt2 } should not be expanded
+code <- "x <- if (cond) a else {\n    b <- 1\n    b + 1\n}"
+result <- rformat(code)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Braced false body in if-else expression should parse"
+)
+expect_true(
+  grepl("else \\{", result),
+  info = "Braced false body should be preserved, not inlined"
 )
