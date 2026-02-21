@@ -100,6 +100,25 @@ if (a) {
 }
 ```
 
+## Correctness Guarantees
+
+rformat is designed around three invariants:
+
+1. **Parse preservation.** Formatted output always parses. rformat uses R's own parser (`utils::getParseData()`) for tokenization and verifies output validity. If input parses, output parses.
+
+2. **Semantic preservation.** Formatting changes only whitespace and style tokens. Assignment conversion (`=` to `<-`) and brace insertion are guided by R's parse tree token types (e.g., `EQ_ASSIGN` vs `EQ_SUB`), ensuring they never change meaning.
+
+3. **Idempotency.** Formatting is a fixed point: `rformat(rformat(x)) == rformat(x)`. This is enforced by a stress test suite that formats every file twice and diffs the results. Continuation indentation uses depth-based offsets (matching the initial indentation pass) rather than column-aligned positions, specifically to guarantee stability across passes.
+
+### Stress Testing
+
+The test suite (`lab/stress_test.R`) downloads source tarballs from CRAN and formats every `.R` file, checking:
+
+- **Parse gate**: formatted code must parse without errors
+- **Idempotency**: formatting twice produces identical output
+
+Tested against 100 popular CRAN packages spanning data manipulation (dplyr, data.table), visualization (ggplot2, plotly), modeling (caret, xgboost, brms), infrastructure (Rcpp, rlang, vctrs), web (shiny, plumber), and more.
+
 ## Philosophy
 
 This formatter follows [tinyverse](https://www.tinyverse.org) principles. The only dependency is `utils::getParseData()` for tokenization.

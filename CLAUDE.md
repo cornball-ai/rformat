@@ -104,9 +104,13 @@ if (!is.numeric(x)) {
 - 80 character limit for function signature wrapping
 - Break lines at commas
 
-## Multi-byte Characters
+## Column Positions in getParseData()
 
-R's `getParseData()` returns character-based column positions (`col1`, `col2`), not byte positions. This was verified experimentally — an em-dash (`—`, 3 bytes in UTF-8) still counts as 1 column. So `substring()` and `nchar()` work correctly with parse data columns. No byte-to-character conversion is needed.
+R's `getParseData()` column positions (`col1`, `col2`) have two behaviors:
+- **Multi-byte characters**: Character-based, not byte-based. An em-dash (`—`, 3 bytes UTF-8) counts as 1 column.
+- **Tabs**: Expanded to 8-column tab stops. A tab at column 1 advances to column 9.
+
+This means `substring()` with `col1`/`col2` is **wrong** when the line contains tabs. Use the `col_to_charpos()` helper to convert tab-expanded columns to character positions, and `display_width()` for tab-expanded line lengths.
 
 ## Package Development
 
