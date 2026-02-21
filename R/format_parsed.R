@@ -249,6 +249,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         line_limit = if (expand_if) 0L else line_limit)
 
     # Final wrap pass: earlier passes may have produced new long lines
+    result <- wrap_long_operators(result, line_limit = line_limit)
     result <- wrap_long_calls(result, line_limit = line_limit)
 
     result
@@ -526,6 +527,11 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                 if (body_depth < 0 || terminals$token[body_end_idx] == "','") {
                     body_end_idx <- body_end_idx - 1
                     body_tokens <- terminals[(close_idx + 1):body_end_idx,]
+                }
+                # Skip if inline body is complex (multi-line or contains braces/control)
+                if (any(body_tokens$line2 > body_tokens$line1) ||
+                    any(body_tokens$token %in% c("'{'", "'}'", "IF", "ELSE"))) {
+                    next
                 }
                 has_inline_body <- TRUE
                 inline_body <- format_line_tokens(body_tokens)
@@ -849,16 +855,29 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
             true_end_line <- assign_line
         }
         false_tokens <- terminals[false_start:false_end,]
+        # Skip if branches are complex (function expressions, comments, or multi-line)
+        if (any(true_tokens$token == "FUNCTION") ||
+            any(false_tokens$token == "FUNCTION") ||
+            any(true_tokens$token == "COMMENT") ||
+            any(false_tokens$token == "COMMENT") ||
+            any(true_tokens$line2 > true_tokens$line1) ||
+            any(false_tokens$line2 > false_tokens$line1)) {
+            next
+        }
         if (nrow(false_tokens) > 0) {
             false_end_line <- max(false_tokens$line2)
         } else {
             false_end_line <- assign_line
         }
 
-        # Skip short single-line expressions when line_limit > 0
-        # Always expand multi-line inline if-else (already wrapped = hard to read)
+        # Skip multi-line inline if-else when line_limit > 0 (avoid breaking)
         spans_lines <- false_end_line > assign_line ||
         true_end_line > assign_line
+        if (spans_lines && line_limit > 0L) {
+            next
+        }
+
+        # Skip short single-line expressions when line_limit > 0
         if (line_limit > 0L && !spans_lines &&
             nchar(lines[assign_line]) <= line_limit) {
             next
@@ -918,15 +937,19 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
 #' @param tokens Data frame of tokens for one line.
 #' @return Formatted line content (no leading whitespace).
 #' @keywords internal
-format_line_tokens <- function (tokens) {
+#' @param prev_token Optional token to treat as the previous token when
+#'   formatting a token subset (e.g., suffix after a collapsed call).
+#' @param prev_prev_token Optional token before prev_token for unary detection.
+format_line_tokens <- function (tokens, prev_token = NULL,
+    prev_prev_token = NULL) {
     if (nrow(tokens) == 0) {
         return("")
     }
 
     tokens <- tokens[order(tokens$line1, tokens$col1),]
     parts <- character(nrow(tokens))
-    prev <- NULL
-    prev_prev <- NULL
+    prev <- prev_token
+    prev_prev <- prev_prev_token
 
     for (i in seq_len(nrow(tokens))) {
         tok <- tokens[i,]
@@ -1312,13 +1335,14 @@ collapse_one_call <- function (code) {
             terminals$col1 > terminals$col1[close_idx],]
         suffix <- ""
         if (nrow(after_close) > 0) {
-            suffix <- format_line_tokens(after_close)
-            # Add space before suffix if needed
             last_call_tok <- call_tokens[nrow(call_tokens),]
-            first_after <- after_close[1,]
-            if (needs_space(last_call_tok, first_after)) {
-                suffix <- paste0(" ", suffix)
+            prev_prev_tok <- NULL
+            if (nrow(call_tokens) >= 2) {
+                prev_prev_tok <- call_tokens[nrow(call_tokens) - 1,]
             }
+            suffix <- format_line_tokens(after_close,
+                prev_token = last_call_tok,
+                prev_prev_token = prev_prev_tok)
         }
 
         full_line <- paste0(full_line, suffix)
@@ -1450,16 +1474,26 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         # Only wrap single-line calls
         if (terminals$line1[close_idx] != call_line) { next }
 
+        # Skip calls with embedded control blocks or function literals
+        call_tokens <- terminals[seq(open_idx, close_idx),]
+        if (any(call_tokens$token %in% c("'{'", "'}'", "FUNCTION", "IF", "ELSE"))) {
+            next
+        }
+
         # Need at least one comma at depth 1 to have something to wrap
         has_comma <- FALSE
         for (k in seq(open_idx + 1, close_idx - 1)) {
             if (terminals$token[k] == "','" &&
                 terminals$line1[k] == call_line) {
-                # Check this comma is at depth 1 (not inside nested parens)
+                # Check this comma is at depth 1 (not inside nested parens/brackets)
                 depth <- 0
                 for (m in seq(open_idx + 1, k)) {
                     if (terminals$token[m] == "'('") { depth <- depth + 1 }
                     if (terminals$token[m] == "')'") { depth <- depth - 1 }
+                    if (terminals$token[m] == "'['") { depth <- depth + 1 }
+                    if (terminals$token[m] == "']'") { depth <- depth - 1 }
+                    if (terminals$token[m] == "LBB") { depth <- depth + 2 }
+                    if (terminals$token[m] == "']]'") { depth <- depth - 2 }
                 }
                 if (depth == 0) {
                     has_comma <- TRUE
@@ -1488,6 +1522,10 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
             tok <- terminals[k,]
             if (tok$token == "'('") { depth <- depth + 1 }
             if (tok$token == "')'") { depth <- depth - 1 }
+            if (tok$token == "'['") { depth <- depth + 1 }
+            if (tok$token == "']'") { depth <- depth - 1 }
+            if (tok$token == "LBB") { depth <- depth + 2 }
+            if (tok$token == "']]'") { depth <- depth - 2 }
 
             if (tok$token == "','" && depth == 0) {
                 if (length(current_arg_tokens) > 0) {
@@ -1704,18 +1742,27 @@ add_one_control_brace <- function (code) {
                 }
                 if (skip_chain) { next }
             }
-            # Skip if-else used as function argument (inside unclosed parens)
+            # Skip if-else used as expression inside unclosed parens/brackets
             all_before <- terminals[seq_len(nrow(terminals)) < i,]
             paren_balance <- 0
+            bracket_balance <- 0
             for (bi in seq_len(nrow(all_before))) {
                 btk <- all_before$token[bi]
                 if (btk == "'('") {
                     paren_balance <- paren_balance + 1
                 } else if (btk == "')'") {
                     paren_balance <- paren_balance - 1
+                } else if (btk == "'['") {
+                    bracket_balance <- bracket_balance + 1
+                } else if (btk == "']'") {
+                    bracket_balance <- bracket_balance - 1
+                } else if (btk == "LBB") {
+                    bracket_balance <- bracket_balance + 2
+                } else if (btk == "']]'") {
+                    bracket_balance <- bracket_balance - 2
                 }
             }
-            if (paren_balance > 0) { next }
+            if (paren_balance > 0 || bracket_balance > 0) { next }
         }
 
         # Find the opening ( after the keyword
@@ -1788,6 +1835,11 @@ add_one_control_brace <- function (code) {
                 if (next_tok$token == "ELSE") { break }
 
                 if (next_tok$line1 > btok$line1) {
+                    # If current line ends with assignment, RHS continues
+                    if (btok$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN")) {
+                        body_end_idx <- body_end_idx + 1
+                        next
+                    }
                     cont_tokens <- c("'+'", "'-'", "'*'", "'/'", "'^'",
                         "SPECIAL", "AND", "OR", "AND2", "OR2", "GT", "LT",
                         "GE", "LE", "EQ", "NE", "LEFT_ASSIGN", "EQ_ASSIGN",
@@ -1804,6 +1856,9 @@ add_one_control_brace <- function (code) {
         }
 
         body_tokens <- terminals[body_start_idx:body_end_idx,]
+        # If body spans multiple lines, skip to avoid collapsing blocks
+        body_span_end <- max(body_tokens$line2)
+        if (body_span_end > body_start$line1) { next }
         body_has_comment <- any(body_tokens$token == "COMMENT")
         body_text <- format_line_tokens(body_tokens)
 
@@ -1817,6 +1872,21 @@ add_one_control_brace <- function (code) {
         } else {
             " {"
         }
+
+        # Compute extra depth if control keyword is inside an open block on the same line
+        ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
+        before_on_line <- terminals[terminals$line1 == ctrl_line &
+            terminals$col1 < tok$col1,]
+        extra_depth <- 0
+        if (nrow(before_on_line) > 0) {
+            extra_depth <- extra_depth +
+            sum(before_on_line$token %in% c("'{'", "'('", "'['")) +
+            2L * sum(before_on_line$token == "LBB") -
+            sum(before_on_line$token %in% c("'}'", "')'", "']'")) -
+            2L * sum(before_on_line$token == "']]'")
+            if (extra_depth < 0) { extra_depth <- 0 }
+        }
+        inner_indent <- paste0(ctrl_indent, strrep("    ", extra_depth + 1L))
 
         has_else <- FALSE
         else_idx <- body_end_idx + 1
@@ -1854,8 +1924,6 @@ add_one_control_brace <- function (code) {
                 else_body_line <- else_body_start$line1
                 new_line <- paste0(prefix, " { ", body_text, " } else {")
                 if (body_has_comment || nchar(new_line) > 80L) {
-                    ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
-                    inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(paste0(prefix, open_brace_suffix),
                         paste0(inner_indent, body_text),
                         paste0(ctrl_indent, "} else {"))
@@ -1877,7 +1945,6 @@ add_one_control_brace <- function (code) {
                 if_rest <- paste0(ctrl_indent,
                     trimws(substring(lines[else_body_start$line1], else_body_start$col1)))
                 if (body_has_comment || nchar(new_line) > 80L) {
-                    inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(paste0(prefix, open_brace_suffix),
                         paste0(inner_indent, body_text),
                         paste0(ctrl_indent, "} else"))
@@ -1925,8 +1992,6 @@ add_one_control_brace <- function (code) {
                     else_body_text, " }")
                 if (body_has_comment || else_has_comment ||
                     nchar(new_line) > 80L) {
-                    ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
-                    inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(paste0(prefix, open_brace_suffix),
                         paste0(inner_indent, body_text),
                         paste0(ctrl_indent, "} else {"),
@@ -1947,8 +2012,6 @@ add_one_control_brace <- function (code) {
             body_end_line <- terminals$line1[body_end_idx]
             new_line <- paste0(prefix, " { ", body_text, " }")
             if (body_has_comment || nchar(new_line) > 80L) {
-                ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
-                inner_indent <- paste0(ctrl_indent, "    ")
                 new_lines_vec <- c(paste0(prefix, open_brace_suffix),
                     paste0(inner_indent, body_text), paste0(ctrl_indent, "}"))
                 new_code_lines <- c(pre_lines, new_lines_vec,
@@ -2092,8 +2155,12 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
             if (tok_j$col1 > break_tok$col1) { break }
             if (tok_j$token %in% c("'('", "'['")) {
                 bracket_depth <- bracket_depth + 1
+            } else if (tok_j$token == "LBB") {
+                bracket_depth <- bracket_depth + 2
             } else if (tok_j$token %in% c("')'", "']'")) {
                 bracket_depth <- bracket_depth - 1
+            } else if (tok_j$token == "']]'") {
+                bracket_depth <- bracket_depth - 2
             }
         }
 
@@ -2125,4 +2192,3 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
 
     NULL
 }
-
