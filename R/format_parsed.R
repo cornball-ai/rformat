@@ -505,6 +505,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
 
         # Add brace or inline body
         if (has_brace) {
+            brace_tok <- terminals[close_idx + 1,]
             if (brace_style == "kr") {
                 # K&R: brace on same line as closing paren
                 new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)],
@@ -512,6 +513,12 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
             } else {
                 # Allman: brace on its own line
                 new_lines <- c(new_lines, paste0(base_indent, "{"))
+            }
+            # Preserve body content after { on the same line
+            brace_rest <- substring(lines[brace_tok$line1], brace_tok$col2 + 1)
+            if (nzchar(trimws(brace_rest))) {
+                new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)],
+                                                       brace_rest)
             }
         } else if (has_inline_body) {
             # Append inline body and any suffix (e.g., ", other_args)" in outer call)
@@ -1002,7 +1009,7 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
         return(TRUE)
     }
 
-    if (p == "','") {
+    if (p %in% c("','", "';'")) {
         return(TRUE)
     }
 
@@ -1312,6 +1319,10 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         # Only consider single-line calls on lines that are too long
         if (nchar(lines[call_line]) <= line_limit) { next }
+
+        # Skip lines with semicolons (multiple statements on one line)
+        line_toks <- terminals[terminals$line1 == call_line,]
+        if (any(line_toks$token == "';'")) { next }
 
         # Find matching ')'
         paren_depth <- 1
@@ -1668,19 +1679,24 @@ add_one_control_brace <- function (code) {
                 }
             } else if (else_body_start$token == "IF") {
                 new_line <- paste0(prefix, " { ", body_text, " } else")
+                # The IF may be on the same line as ELSE — reconstruct
+                # the "if ..." part from the IF token's column onward
+                ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
+                if_rest <- paste0(ctrl_indent,
+                                  trimws(substring(lines[else_body_start$line1],
+                                                   else_body_start$col1)))
                 if (body_has_comment || nchar(new_line) > 80L) {
-                    ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                     inner_indent <- paste0(ctrl_indent, "    ")
                     new_lines_vec <- c(paste0(prefix, " {"),
                                        paste0(inner_indent, body_text),
                                        paste0(ctrl_indent, "} else"))
-                    new_code_lines <- c(pre_lines, new_lines_vec,
-                                        if (else_tok$line1 < length(lines)) lines[seq(else_tok$line1 + 1,
-                                                                                      length(lines))] else character(0))
+                    new_code_lines <- c(pre_lines, new_lines_vec, if_rest,
+                                        if (else_body_start$line1 < length(lines)) lines[seq(else_body_start$line1 + 1,
+                                                                                             length(lines))] else character(0))
                 } else {
-                    new_code_lines <- c(pre_lines, new_line,
-                                        if (else_tok$line1 < length(lines)) lines[seq(else_tok$line1 + 1,
-                                                                                      length(lines))] else character(0))
+                    new_code_lines <- c(pre_lines, new_line, if_rest,
+                                        if (else_body_start$line1 < length(lines)) lines[seq(else_body_start$line1 + 1,
+                                                                                             length(lines))] else character(0))
                 }
             } else {
                 # Both branches bare
@@ -1828,6 +1844,9 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
 
         line_toks <- terminals[terminals$line1 == line_num,]
         if (nrow(line_toks) == 0) { next }
+
+        # Skip lines with semicolons (multiple statements on one line)
+        if (any(line_toks$token == "';'")) { next }
 
         # Calculate paren depth at the start of this line
         start_depth <- 0
