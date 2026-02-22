@@ -38,10 +38,8 @@ collapse_calls <- function (code) {
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
 collapse_one_call <- function (code) {
-    parsed <- tryCatch(
-        parse(text = code, keep.source = TRUE),
-        error = function (e) NULL
-    )
+    parsed <- tryCatch(parse(text = code, keep.source = TRUE),
+                       error = function (e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)
@@ -94,9 +92,8 @@ collapse_one_call <- function (code) {
         inner_tokens <- terminals[seq(open_idx, close_idx),]
         if (any(inner_tokens$token == "COMMENT")) { next }
 
-        # Skip if the group contains a FUNCTION definition or braces
-        if (any(inner_tokens$token == "FUNCTION")) { next }
-        if (any(inner_tokens$token == "'{'")) { next }
+        # Skip if the group contains braces (multi-line function bodies, etc.)
+        if (any(inner_tokens$token %in% c("'{'", "'}'"))) { next }
 
         # Build collapsed text from tokens
         call_tokens <- terminals[seq(ci, close_idx),]
@@ -107,7 +104,7 @@ collapse_one_call <- function (code) {
         func_col <- terminals$col1[ci]
         if (func_col > 1) {
             prefix <- substring(lines[func_line], 1,
-                col_to_charpos(lines[func_line], func_col - 1))
+                                col_to_charpos(lines[func_line], func_col - 1))
         } else {
             prefix <- ""
         }
@@ -126,8 +123,8 @@ collapse_one_call <- function (code) {
                 prev_prev_tok <- call_tokens[nrow(call_tokens) - 1,]
             }
             suffix <- format_line_tokens(after_close,
-                prev_token = last_call_tok,
-                prev_prev_token = prev_prev_tok)
+                                         prev_token = last_call_tok,
+                                         prev_prev_token = prev_prev_tok)
         }
 
         full_line <- paste0(full_line, suffix)
@@ -160,3 +157,4 @@ collapse_one_call <- function (code) {
 
     NULL
 }
+

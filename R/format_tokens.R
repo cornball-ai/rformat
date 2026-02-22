@@ -16,12 +16,10 @@
 #' @keywords internal
 format_tokens <- function (code, indent = 4L, wrap = "paren",
                            expand_if = FALSE, brace_style = "kr",
-                           line_limit = 80L, postprocess = TRUE) {
+                           line_limit = 80L) {
     # Parse with source tracking
-    parsed <- tryCatch(
-        parse(text = code, keep.source = TRUE),
-        error = function (e) NULL
-    )
+    parsed <- tryCatch(parse(text = code, keep.source = TRUE),
+                       error = function (e) NULL)
 
     if (is.null(parsed)) {
         warning("Could not parse code, returning unchanged")
@@ -56,12 +54,12 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             } else {
                 parts <- c(
                     substring(orig_lines[tok$line1],
-                        col_to_charpos(orig_lines[tok$line1], tok$col1)),
+                              col_to_charpos(orig_lines[tok$line1], tok$col1)),
                     if (tok$line2 > tok$line1 + 1) {
-                    orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
+                        orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
                     },
                     substring(orig_lines[tok$line2], 1,
-                        col_to_charpos(orig_lines[tok$line2], tok$col2)))
+                              col_to_charpos(orig_lines[tok$line2], tok$col2)))
                 terminals$text[i] <- paste(parts, collapse = "\n")
             }
         }
@@ -77,18 +75,65 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     line_end_brace <- integer(max_line)
     line_end_paren <- integer(max_line)
     line_end_pab <- integer(max_line) # paren_at_brace top-of-stack
+    # pab right after the first '}' on a line (before any subsequent '{').
+    # Used for '} else {' lines where end-of-line pab includes the new '{'.
+    line_pab_after_close <- integer(max_line)
 
     for (i in seq_len(nrow(terminals))) {
         tok <- terminals[i,]
         ln <- tok$line1
 
         if (tok$token == "'{'") {
-            paren_at_brace <- c(paren_at_brace, paren_depth)
+            # For control-flow braces (if/for/while/else bodies),
+            # preserve the enclosing paren context so body lines inside
+            # a call get an extra indent level. For bare brace args
+            # (tryCatch({...})) and function bodies, zero out paren
+            # contribution as before.
+            is_ctrl_brace <- FALSE
+            if (i >= 2L) {
+                pt <- terminals$token[i - 1L]
+                if (pt == "ELSE" || pt == "REPEAT") {
+                    is_ctrl_brace <- TRUE
+                } else if (pt == "')'") {
+                    # Check if this ) closes an if/for/while condition
+                    # by scanning back to find the matching ( and checking
+                    # the token before it
+                    pd2 <- 1L
+                    k <- i - 2L
+                    while (k >= 1L && pd2 > 0L) {
+                        if (terminals$token[k] == "')'") { pd2 <- pd2 + 1L }
+                        if (terminals$token[k] == "'('") { pd2 <- pd2 - 1L }
+                        if (pd2 > 0L) { k <- k - 1L }
+                    }
+                    if (k >= 2L &&
+                        terminals$token[k - 1L] %in% c("IF", "FOR", "WHILE")) {
+                        is_ctrl_brace <- TRUE
+                    }
+                }
+            }
+            if (is_ctrl_brace) {
+                # Preserve enclosing pab so paren contribution carries
+                # through into the control-flow body
+                enclosing_pab <- if (length(paren_at_brace) > 0) {
+                    paren_at_brace[length(paren_at_brace)]
+                } else {
+                    0L
+                }
+                paren_at_brace <- c(paren_at_brace, enclosing_pab)
+            } else {
+                paren_at_brace <- c(paren_at_brace, paren_depth)
+            }
             brace_depth <- brace_depth + 1
         } else if (tok$token == "'}'") {
             brace_depth <- max(0, brace_depth - 1)
             if (length(paren_at_brace) > 0) {
                 paren_at_brace <- paren_at_brace[-length(paren_at_brace)]
+            }
+            # Capture pab right after this close-brace
+            line_pab_after_close[ln] <- if (length(paren_at_brace) > 0) {
+                paren_at_brace[length(paren_at_brace)]
+            } else {
+                0L
             }
         } else if (tok$token %in% c("'('", "'['", "LBB")) {
             paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
@@ -139,7 +184,10 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             # contribute to indentation (fixes brace-inside-paren)
             prev_pab <- line_end_pab[ln - 1]
             if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
-                prev_pab <- line_end_pab[ln]
+                # Use pab right after the '}' closes, not end-of-line pab.
+                # This matters for '} else {' where end-of-line pab includes
+                # the new '{' push and would zero out paren contribution.
+                prev_pab <- line_pab_after_close[ln]
             }
             line_indent[ln] <- prev_brace + max(0L, prev_paren - prev_pab)
         }
@@ -229,7 +277,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         result <- paste0(result, "\n")
     }
 
-    if (!isTRUE(postprocess) || is_large_file) {
+    if (is_large_file) {
         return(result)
     }
 
@@ -240,54 +288,42 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # bodies move to their own lines before line-length decisions)
     result <- apply_if_parseable(result, add_control_braces)
 
+    # Expand bare if-else arguments in overlong calls before wrapping,
+    # so the braced form is stable and wrap passes see clean lines
+    result <- apply_if_parseable(result, expand_call_if_args,
+                                 line_limit = line_limit)
+
     # Wrap long lines at operators (||, &&), then at commas
     result <- apply_if_parseable(result, wrap_long_operators,
-        line_limit = line_limit)
+                                 line_limit = line_limit)
     result <- apply_if_parseable(result, wrap_long_calls,
-        line_limit = line_limit)
+                                 line_limit = line_limit)
 
     # Reformat function definitions
     result <- apply_if_parseable(result, reformat_function_defs, wrap = wrap,
-        brace_style = brace_style, line_limit = line_limit)
+                                 brace_style = brace_style,
+                                 line_limit = line_limit)
     # Function-def rewrites can expose bare one-line control flow.
     result <- apply_if_parseable(result, add_control_braces)
 
     # Reformat inline if-else to multi-line
     # Always expand long lines; optionally expand all
-    result <- apply_if_parseable(result, reformat_inline_if,
-        line_limit = if (expand_if) 0L else line_limit)
+    result <- apply_if_parseable(result, reformat_inline_if, line_limit = if (expand_if) {
+            0L
+        } else {
+            line_limit
+        })
+
+    # Final expansion of bare if-else call args
+    result <- apply_if_parseable(result, expand_call_if_args,
+                                 line_limit = line_limit)
 
     # Final wrap pass: earlier passes may have produced new long lines
     result <- apply_if_parseable(result, wrap_long_operators,
-        line_limit = line_limit)
+                                 line_limit = line_limit)
     result <- apply_if_parseable(result, wrap_long_calls,
-        line_limit = line_limit)
-    # Re-run function/control normalization after final wraps so a single
-    # rformat() call does not rely on a second external formatting pass.
-    result <- apply_if_parseable(result, reformat_function_defs, wrap = wrap,
-        brace_style = brace_style, line_limit = line_limit)
-    result <- apply_if_parseable(result, add_control_braces)
-    result <- apply_if_parseable(result, wrap_long_operators,
-        line_limit = line_limit)
-    result <- apply_if_parseable(result, wrap_long_calls,
-        line_limit = line_limit)
-
-    # Canonicalize indentation/spacing after structural rewrites.
-    canonical <- format_tokens(result, indent = indent, wrap = wrap,
-        expand_if = expand_if, brace_style = brace_style,
-        line_limit = line_limit, postprocess = FALSE)
-
-    # Canonical spacing can create newly-overlong lines; wrap once more and
-    # re-canonicalize so a single call reaches a stable normal form.
-    canonical <- apply_if_parseable(canonical, add_control_braces)
-    canonical <- apply_if_parseable(canonical, collapse_calls)
-    canonical <- apply_if_parseable(canonical, wrap_long_operators,
-        line_limit = line_limit)
-    canonical <- apply_if_parseable(canonical, wrap_long_calls,
-        line_limit = line_limit)
-    format_tokens(canonical, indent = indent, wrap = wrap,
-        expand_if = expand_if, brace_style = brace_style,
-        line_limit = line_limit, postprocess = FALSE)
+                                 line_limit = line_limit)
+    result
 }
 #' Format Tokens on a Single Line
 #'
@@ -298,7 +334,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
 #'   formatting a token subset (e.g., suffix after a collapsed call).
 #' @param prev_prev_token Optional token before prev_token for unary detection.
 format_line_tokens <- function (tokens, prev_token = NULL,
-    prev_prev_token = NULL) {
+                                prev_prev_token = NULL) {
     if (nrow(tokens) == 0) {
         return("")
     }
@@ -351,8 +387,9 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     binary_ops <- c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB",
-        "EQ_FORMALS", "AND", "OR", "AND2", "OR2", "GT", "LT", "GE", "LE", "EQ",
-        "NE", "'+'", "'-'", "'*'", "'/'", "'^'", "SPECIAL", "'~'")
+                    "EQ_FORMALS", "AND", "OR", "AND2", "OR2", "GT", "LT", "GE",
+                    "LE", "EQ", "NE", "'+'", "'-'", "'*'", "'/'", "'^'",
+                    "SPECIAL", "'~'")
 
     if (p %in% c("'('", "'['", "LBB")) {
         return(FALSE)
@@ -423,10 +460,11 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
         }
         pp <- prev_prev$token
         unary_context <- c("'('", "'['", "LBB", "','", "'{'", "LEFT_ASSIGN",
-            "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB", "EQ_FORMALS", "AND", "OR",
-            "AND2", "OR2", "GT", "LT", "GE", "LE", "EQ", "NE", "'+'", "'-'",
-            "'*'", "'/'", "'^'", "SPECIAL", "'~'", "'!'", "IF", "ELSE", "FOR",
-            "WHILE", "REPEAT", "IN", "RETURN", "NEXT", "BREAK")
+                           "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB", "EQ_FORMALS",
+                           "AND", "OR", "AND2", "OR2", "GT", "LT", "GE", "LE",
+                           "EQ", "NE", "'+'", "'-'", "'*'", "'/'", "'^'",
+                           "SPECIAL", "'~'", "'!'", "IF", "ELSE", "FOR",
+                           "WHILE", "REPEAT", "IN", "RETURN", "NEXT", "BREAK")
         if (pp %in% unary_context) {
             return(FALSE)
         }
@@ -445,8 +483,8 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     symbols <- c("SYMBOL", "SYMBOL_FUNCTION_CALL", "SYMBOL_FORMALS",
-        "SYMBOL_SUB", "SYMBOL_PACKAGE", "NUM_CONST", "STR_CONST", "NULL_CONST",
-        "SPECIAL")
+                 "SYMBOL_SUB", "SYMBOL_PACKAGE", "NUM_CONST", "STR_CONST",
+                 "NULL_CONST", "SPECIAL")
 
     if (p %in% symbols && t %in% symbols) {
         return(TRUE)
@@ -544,7 +582,7 @@ extract_expr_text <- function (lines, tokens, target_indent) {
             trimmed <- sub("^\\s*", "", line_text)
             # Add extra indent for continuation (2 more spaces)
             result_lines <- c(result_lines,
-                paste0("\n", target_indent, "  ", trimmed))
+                              paste0("\n", target_indent, "  ", trimmed))
         }
     }
 
@@ -577,7 +615,7 @@ format_blank_lines <- function (code) {
 #' @keywords internal
 is_parseable_code <- function (code) {
     !is.null(tryCatch(parse(text = code, keep.source = TRUE),
-        error = function (e) NULL))
+                      error = function (e) NULL))
 }
 
 #' Apply Transform Only If Output Parses
@@ -588,10 +626,7 @@ is_parseable_code <- function (code) {
 #' @return Transformed code if parseable, otherwise original code.
 #' @keywords internal
 apply_if_parseable <- function (code, fn, ...) {
-    updated <- tryCatch(
-        fn(code, ...),
-        error = function (e) code
-    )
+    updated <- tryCatch(fn(code, ...), error = function (e) code)
 
     if (!is.character(updated) || length(updated) != 1L) {
         return(code)
@@ -616,22 +651,17 @@ apply_if_parseable <- function (code, fn, ...) {
 #' @keywords internal
 iteration_budget <- function (code, default_max, mode = "generic") {
     n_lines <- length(strsplit(code, "\n", fixed = TRUE)[[1]])
-    # On very large files, one-at-a-time parse/rewrite loops are too costly
-    # and can remain non-idempotent under tight timeout budgets. In that
-    # regime we keep only the base token formatting pass.
+    # On very large files, one-at-a-time parse/rewrite loops are too costly.
+    # Keep only the base token formatting pass.
     if (n_lines > 1500L) {
         return(0L)
     }
-    # For medium/large files we disable one-change-at-a-time structural
-    # rewrites that are the main source of non-idempotent drift.
-    if (n_lines > 250L && mode %in% c("collapse", "funcdef", "control")) {
-        return(0L)
-    }
-    if (n_lines > 600L) {
+    if (n_lines > 800L) {
         return(min(default_max, 6L))
     }
-    if (n_lines > 250L) {
-        return(min(default_max, 12L))
+    if (n_lines > 400L) {
+        return(min(default_max, 25L))
     }
     default_max
 }
+

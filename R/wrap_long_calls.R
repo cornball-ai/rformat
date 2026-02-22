@@ -35,10 +35,8 @@ wrap_long_calls <- function (code, line_limit = 80L) {
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
 wrap_one_long_call <- function (code, line_limit = 80L) {
-    parsed <- tryCatch(
-        parse(text = code, keep.source = TRUE),
-        error = function (e) NULL
-    )
+    parsed <- tryCatch(parse(text = code, keep.source = TRUE),
+                       error = function (e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)
@@ -71,13 +69,56 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         line_toks <- terminals[terminals$line1 == call_line,]
         if (any(line_toks$token == "';'")) { next }
 
-        # Skip calls nested inside another call's parens on the same line
-        # (wrap the outermost call, not inner ones)
+        # Skip calls nested inside another wrappable call's parens on the
+        # same line (wrap the outermost call, not inner ones). But allow
+        # wrapping when the outer parens are just operators like !is.null().
         func_col <- terminals$col1[ci]
         before <- line_toks[line_toks$col1 < func_col,]
         paren_depth_before <- sum(before$token == "'('") -
         sum(before$token == "')'")
-        if (paren_depth_before > 0) { next }
+        if (paren_depth_before > 0) {
+            # Check if any outer single-line call on this line has a
+            # comma at depth 1 (i.e., it's a wrappable multi-arg call
+            # that hasn't been wrapped yet). If so, skip this inner
+            # call — the outer one should be wrapped first.
+            outer_has_comma <- FALSE
+            outer_calls <- which(line_toks$token == "SYMBOL_FUNCTION_CALL" &
+                line_toks$col1 < func_col)
+            for (oc in outer_calls) {
+                # Find this outer call's open paren in the full terminals
+                oc_global <- which(terminals$line1 == call_line &
+                    terminals$col1 == line_toks$col1[oc] &
+                    terminals$token == "SYMBOL_FUNCTION_CALL")
+                if (length(oc_global) == 0) { next }
+                oc_open <- oc_global[1] + 1
+                if (oc_open > nrow(terminals)) { next }
+                if (terminals$token[oc_open] != "'('") { next }
+                # Find matching close paren
+                od <- 1
+                oc_close <- oc_open + 1
+                while (oc_close <= nrow(terminals) && od > 0) {
+                    if (terminals$token[oc_close] == "'('") { od <- od + 1 }
+                    if (terminals$token[oc_close] == "')'") { od <- od - 1 }
+                    if (od > 0) { oc_close <- oc_close + 1 }
+                }
+                # Only skip if the outer call is single-line (not yet wrapped)
+                if (oc_close > nrow(terminals)) { next }
+                if (terminals$line1[oc_close] != call_line) { next }
+                oc_depth <- 0
+                for (ot in seq(oc + 1, nrow(line_toks))) {
+                    otok <- line_toks$token[ot]
+                    if (otok == "'('") { oc_depth <- oc_depth + 1 }
+                    if (otok == "')'") { oc_depth <- oc_depth - 1 }
+                    if (oc_depth <= 0) { break }
+                    if (otok == "','" && oc_depth == 1) {
+                        outer_has_comma <- TRUE
+                        break
+                    }
+                }
+                if (outer_has_comma) { break }
+            }
+            if (outer_has_comma) { next }
+        }
 
         # Find matching ')'
         paren_depth <- 1
@@ -96,9 +137,9 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         # Only wrap single-line calls
         if (terminals$line1[close_idx] != call_line) { next }
 
-        # Skip calls with embedded control blocks or function literals
+        # Skip calls with embedded braces (multi-line function bodies, etc.)
         call_tokens <- terminals[seq(open_idx, close_idx),]
-        if (any(call_tokens$token %in% c("'{'", "'}'", "FUNCTION", "IF", "ELSE"))) {
+        if (any(call_tokens$token %in% c("'{'", "'}'"))) {
             next
         }
 
@@ -125,16 +166,6 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         }
         if (!has_comma) { next }
 
-        # Continuation indent: depth-based to match format_tokens
-        # (base_indent + 1 level for the call's (, plus levels for any
-        # unclosed [ or [[ brackets before the call on the same line)
-        base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
-        bracket_depth_before <- sum(before$token == "'['") +
-        2L * sum(before$token == "LBB") -
-        sum(before$token == "']'")
-        cont_indent <- paste0(base_indent,
-            strrep("    ", max(0, bracket_depth_before) + 1))
-
         # Collect arguments as groups of tokens between commas at depth 1
         args <- list()
         current_arg_tokens <- list()
@@ -152,7 +183,7 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
             if (tok$token == "','" && depth == 0) {
                 if (length(current_arg_tokens) > 0) {
                     arg_df <- do.call(rbind,
-                        lapply(current_arg_tokens, as.data.frame))
+                                      lapply(current_arg_tokens, as.data.frame))
                     args[[length(args) + 1]] <- format_line_tokens(arg_df)
                 }
                 current_arg_tokens <- list()
@@ -180,6 +211,9 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         }
 
         func_name <- terminals$text[ci]
+
+        # Continuation indent: align to opening paren column
+        cont_indent <- strrep(" ", nchar(prefix) + nchar(func_name) + 1)
 
         # Get suffix (everything after closing paren on the same line)
         close_col <- terminals$col2[close_idx]
@@ -214,6 +248,32 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         # Only wrap if we actually split into multiple lines
         if (length(new_lines) < 2) { next }
+
+        # If paren alignment pushed continuation lines over the limit,
+        # fall back to depth-based indent (base_indent + one level)
+        if (any(nchar(new_lines) > line_limit)) {
+            base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
+            cont_indent <- paste0(base_indent, "    ")
+            new_lines <- character(0)
+            current_line <- paste0(prefix, func_name, "(")
+            for (j in seq_along(args)) {
+                if (j < length(args)) {
+                    arg_text <- paste0(args[[j]], ", ")
+                } else {
+                    arg_text <- paste0(args[[j]], ")", suffix)
+                }
+                test_line <- paste0(current_line, arg_text)
+                if (nchar(test_line) > line_limit &&
+                    nchar(current_line) > nchar(cont_indent)) {
+                    new_lines <- c(new_lines, sub(" $", "", current_line))
+                    current_line <- paste0(cont_indent, arg_text)
+                } else {
+                    current_line <- test_line
+                }
+            }
+            new_lines <- c(new_lines, sub(" $", "", current_line))
+            if (length(new_lines) < 2) { next }
+        }
 
         # Replace the line
         if (call_line > 1) {
@@ -277,10 +337,8 @@ wrap_long_operators <- function (code, line_limit = 80L) {
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
 wrap_one_long_operator <- function (code, line_limit = 80L) {
-    parsed <- tryCatch(
-        parse(text = code, keep.source = TRUE),
-        error = function (e) NULL
-    )
+    parsed <- tryCatch(parse(text = code, keep.source = TRUE),
+                       error = function (e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)
@@ -343,7 +401,7 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
 
         # First part: up to and including the operator
         first_part <- substring(lines[line_num], 1,
-            col_to_charpos(lines[line_num], break_tok$col2))
+                                col_to_charpos(lines[line_num], break_tok$col2))
 
         # Continuation indent: depth-based to match format_tokens
         # (base_indent already reflects brace/paren depth from format_tokens;
@@ -366,11 +424,11 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
         }
 
         cont_indent <- paste0(base_indent,
-            strrep("    ", max(0, bracket_depth)))
+                              strrep("    ", max(0, bracket_depth)))
 
         # Second part: rest of line, trimmed
         rest <- substring(lines[line_num],
-            col_to_charpos(lines[line_num], break_tok$col2) + 1)
+                          col_to_charpos(lines[line_num], break_tok$col2) + 1)
         rest <- sub("^\\s+", "", rest)
 
         new_lines <- c(first_part, paste0(cont_indent, rest))
@@ -393,3 +451,4 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
 
     NULL
 }
+

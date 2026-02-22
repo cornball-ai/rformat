@@ -24,10 +24,8 @@ reformat_inline_if <- function (code, line_limit = 0L) {
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
 reformat_one_inline_if <- function (code, line_limit = 0L) {
-    parsed <- tryCatch(
-        parse(text = code, keep.source = TRUE),
-        error = function (e) NULL
-    )
+    parsed <- tryCatch(parse(text = code, keep.source = TRUE),
+                       error = function (e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)
@@ -278,10 +276,10 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
 
         # Build replacement lines
         new_lines <- c(paste0(base_indent, "if (", cond_text, ") {"),
-            paste0(inner_indent, var_name, " <- ", true_text),
-            paste0(base_indent, "} else {"),
-            paste0(inner_indent, var_name, " <- ", false_text),
-            paste0(base_indent, "}"))
+                       paste0(inner_indent, var_name, " <- ", true_text),
+                       paste0(base_indent, "} else {"),
+                       paste0(inner_indent, var_name, " <- ", false_text),
+                       paste0(base_indent, "}"))
 
         # Find actual end line (could span multiple lines)
         end_line <- false_end_line
@@ -305,3 +303,4 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
 
     NULL
 }
+

@@ -133,24 +133,20 @@ expect_true(
   info = "Calls with comments should stay multi-line"
 )
 
-# Don't collapse calls containing function definitions
+# Collapse short calls with inline function definitions
 code <- "lapply(x,\n  function(i) i + 1\n)"
-result <- rformat(code)
-expect_true(
-  grepl("\n", sub("\n$", "", result)),
-  info = "Calls with function defs should stay multi-line"
-)
+expect_equal(rformat(code), "lapply(x, function (i) i + 1)\n")
 
-# Wrap long function calls at commas with depth-based continuation
+# Wrap long function calls at commas with paren-aligned continuation
 expect_equal(
   rformat("x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e, very_long_f)"),
-  "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e,\n    very_long_f)\n"
+  "x <- c(very_long_a, very_long_b, very_long_c, very_long_d, very_long_e,\n       very_long_f)\n"
 )
 
 # Wrap long named-arg calls
 expect_equal(
   rformat("result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5, zeta = 6, eta = 7)"),
-  "result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5,\n    zeta = 6, eta = 7)\n"
+  "result <- list(alpha = 1, beta = 2, gamma = 3, delta = 4, epsilon = 5,\n               zeta = 6, eta = 7)\n"
 )
 
 # Short calls stay on one line
@@ -539,4 +535,27 @@ r2 <- rformat(r1)
 expect_equal(
   r1, r2,
   info = "Inline anonymous function arguments should stay idempotent"
+)
+
+# --- Bare if-else in function call expansion ---
+# Long call with bare if-else arg should expand to braced form
+code <- "new_code_lines <- c(pre_lines, new_lines_vec, if (end < length(lines)) lines[seq(end + 1, length(lines))] else character(0))"
+r1 <- rformat(code)
+expect_true(
+  grepl("\\} else \\{", r1),
+  info = "Long bare if-else in call should expand to braced form"
+)
+expect_true(
+  !is.null(tryCatch(parse(text = r1), error = function(e) NULL)),
+  info = "Expanded bare if-else in call should produce valid R code"
+)
+r2 <- rformat(r1)
+expect_equal(r1, r2, info = "Expanded bare if-else in call should be idempotent")
+
+# Short if-else in call stays inline
+code <- "x <- c(if (a) b else d, e)"
+r1 <- rformat(code)
+expect_true(
+  grepl("c\\(if \\(a\\) b else d", r1),
+  info = "Short bare if-else in call should stay inline"
 )
