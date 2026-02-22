@@ -29,14 +29,15 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
     # Only normalize `} else` when needed for parsing. Applying this
     # unconditionally can destabilize already-valid nested if/else layouts.
     parsed_ok <- !is.null(tryCatch(parse(text = code, keep.source = TRUE),
-        error = function (e) NULL))
+                                   error = function (e) NULL))
     if (!parsed_ok) {
         code <- fix_else_placement(code)
     }
 
     formatted <- format_tokens(code, indent = indent, wrap = wrap,
-        expand_if = expand_if, brace_style = brace_style,
-        line_limit = line_limit)
+                               expand_if = expand_if,
+                               brace_style = brace_style,
+                               line_limit = line_limit)
 
     format_blank_lines(formatted)
 }
@@ -77,8 +78,8 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 
     code <- paste(readLines(path, warn = FALSE), collapse = "\n")
     formatted <- rformat(code, indent = indent, wrap = wrap,
-        expand_if = expand_if, brace_style = brace_style,
-        line_limit = line_limit)
+                         expand_if = expand_if, brace_style = brace_style,
+                         line_limit = line_limit)
 
     if (!dry_run) {
         if (is.null(output)) {
@@ -127,15 +128,15 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
     }
 
     files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE,
-        recursive = recursive)
+                        recursive = recursive)
 
     modified <- character(0)
 
     for (f in files) {
         original <- paste(readLines(f, warn = FALSE), collapse = "\n")
         formatted <- rformat(original, indent = indent, wrap = wrap,
-            expand_if = expand_if, brace_style = brace_style,
-            line_limit = line_limit)
+                             expand_if = expand_if, brace_style = brace_style,
+                             line_limit = line_limit)
 
         if (formatted != original) {
             modified <- c(modified, f)
@@ -150,3 +151,4 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
 
     invisible(modified)
 }
+
