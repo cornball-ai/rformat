@@ -29,7 +29,7 @@ packages <- subset_packages(stress_packages)
 
 cache_dir <- Sys.getenv("CACHE_DIR", file.path(path.expand("~"), ".cache", "rformat_cran_src"))
 fail_dir <- Sys.getenv("FAIL_DIR", file.path("lab", "stress_failures"))
-out_file <- Sys.getenv("OUT_FILE", file.path("lab", "stress_test_results.csv"))
+out_file <- Sys.getenv("OUT_FILE", file.path("lab", "stress_test_results_master.csv"))
 file_timeout <- as.integer(Sys.getenv("TIMEOUT", "10"))
 
 dir.create(fail_dir, showWarnings = FALSE, recursive = TRUE)
@@ -178,9 +178,23 @@ for (pkg in packages) {
             row$formatted_ok <- row$formatted_ok + 1L
 
             formatted2 <- tryCatch(
-                suppressWarnings(rformat(formatted)),
-                error = function(e) NULL
+                {
+                    setTimeLimit(elapsed = file_timeout)
+                    on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
+                    suppressWarnings(rformat(formatted))
+                },
+                error = function(e) {
+                    if (grepl("time limit|elapsed", e$message, ignore.case = TRUE)) {
+                        structure("TIMEOUT", class = "timeout_marker")
+                    } else {
+                        NULL
+                    }
+                }
             )
+            if (inherits(formatted2, "timeout_marker")) {
+                timed_out <- c(timed_out, basename(f))
+                next
+            }
             if (!is.null(formatted2) && formatted2 != formatted) {
                 not_idempotent_files <- c(not_idempotent_files, basename(f))
                 # Save artifacts for idempotency failures

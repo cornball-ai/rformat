@@ -26,12 +26,18 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
         stop("`code` must be a character string")
     }
 
-    # Fix } else placement before parsing (R can't parse }\nelse)
-    code <- fix_else_placement(code)
+    # Only normalize `} else` when needed for parsing. Applying this
+    # unconditionally can destabilize already-valid nested if/else layouts.
+    parsed_ok <- !is.null(tryCatch(parse(text = code, keep.source = TRUE),
+        error = function (e) NULL))
+    if (!parsed_ok) {
+        code <- fix_else_placement(code)
+    }
 
     formatted <- format_tokens(code, indent = indent, wrap = wrap,
         expand_if = expand_if, brace_style = brace_style,
         line_limit = line_limit)
+
     format_blank_lines(formatted)
 }
 
@@ -144,4 +150,3 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
 
     invisible(modified)
 }
-

@@ -16,7 +16,7 @@
 #' @keywords internal
 format_tokens <- function (code, indent = 4L, wrap = "paren",
                            expand_if = FALSE, brace_style = "kr",
-                           line_limit = 80L) {
+                           line_limit = 80L, postprocess = TRUE) {
     # Parse with source tracking
     parsed <- tryCatch(
         parse(text = code, keep.source = TRUE),
@@ -40,6 +40,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
 
     # Split original into lines for comment preservation
     orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    is_large_file <- length(orig_lines) > 1500L
 
     # Fix truncated string constants from getParseData()
     # Long STR_CONST tokens (~1000+ chars) get truncated to
@@ -199,26 +200,26 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 out_lines[line_num] <- trimws(line)
             } else {
                 if (line_num <= max_line) {
-                    indent <- line_indent[line_num]
+                    line_level <- line_indent[line_num]
                 } else {
-                    indent <- 0
+                    line_level <- 0
                 }
                 out_lines[line_num] <- paste0(
-                    paste0(rep(indent_str, indent), collapse = ""),
+                    paste0(rep(indent_str, line_level), collapse = ""),
                     trimws(line))
             }
             next
         }
 
         if (line_num <= max_line) {
-            indent <- line_indent[line_num]
+            line_level <- line_indent[line_num]
         } else {
-            indent <- 0
+            line_level <- 0
         }
         formatted <- format_line_tokens(line_tokens)
 
         out_lines[line_num] <- paste0(
-            paste0(rep(indent_str, indent), collapse = ""), formatted)
+            paste0(rep(indent_str, line_level), collapse = ""), formatted)
     }
 
     # Filter out NA lines (multi-line token continuations)
@@ -228,31 +229,65 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         result <- paste0(result, "\n")
     }
 
+    if (!isTRUE(postprocess) || is_large_file) {
+        return(result)
+    }
+
     # Collapse multi-line calls that fit on one line
-    result <- collapse_calls(result)
+    result <- apply_if_parseable(result, collapse_calls)
 
     # Add braces to one-liner control flow (before wrapping, so bare
     # bodies move to their own lines before line-length decisions)
-    result <- add_control_braces(result)
+    result <- apply_if_parseable(result, add_control_braces)
 
     # Wrap long lines at operators (||, &&), then at commas
-    result <- wrap_long_operators(result, line_limit = line_limit)
-    result <- wrap_long_calls(result, line_limit = line_limit)
+    result <- apply_if_parseable(result, wrap_long_operators,
+        line_limit = line_limit)
+    result <- apply_if_parseable(result, wrap_long_calls,
+        line_limit = line_limit)
 
     # Reformat function definitions
-    result <- reformat_function_defs(result, wrap = wrap,
+    result <- apply_if_parseable(result, reformat_function_defs, wrap = wrap,
         brace_style = brace_style, line_limit = line_limit)
+    # Function-def rewrites can expose bare one-line control flow.
+    result <- apply_if_parseable(result, add_control_braces)
 
     # Reformat inline if-else to multi-line
     # Always expand long lines; optionally expand all
-    result <- reformat_inline_if(result,
+    result <- apply_if_parseable(result, reformat_inline_if,
         line_limit = if (expand_if) 0L else line_limit)
 
     # Final wrap pass: earlier passes may have produced new long lines
-    result <- wrap_long_operators(result, line_limit = line_limit)
-    result <- wrap_long_calls(result, line_limit = line_limit)
+    result <- apply_if_parseable(result, wrap_long_operators,
+        line_limit = line_limit)
+    result <- apply_if_parseable(result, wrap_long_calls,
+        line_limit = line_limit)
+    # Re-run function/control normalization after final wraps so a single
+    # rformat() call does not rely on a second external formatting pass.
+    result <- apply_if_parseable(result, reformat_function_defs, wrap = wrap,
+        brace_style = brace_style, line_limit = line_limit)
+    result <- apply_if_parseable(result, add_control_braces)
+    result <- apply_if_parseable(result, wrap_long_operators,
+        line_limit = line_limit)
+    result <- apply_if_parseable(result, wrap_long_calls,
+        line_limit = line_limit)
 
-    result
+    # Canonicalize indentation/spacing after structural rewrites.
+    canonical <- format_tokens(result, indent = indent, wrap = wrap,
+        expand_if = expand_if, brace_style = brace_style,
+        line_limit = line_limit, postprocess = FALSE)
+
+    # Canonical spacing can create newly-overlong lines; wrap once more and
+    # re-canonicalize so a single call reaches a stable normal form.
+    canonical <- apply_if_parseable(canonical, add_control_braces)
+    canonical <- apply_if_parseable(canonical, collapse_calls)
+    canonical <- apply_if_parseable(canonical, wrap_long_operators,
+        line_limit = line_limit)
+    canonical <- apply_if_parseable(canonical, wrap_long_calls,
+        line_limit = line_limit)
+    format_tokens(canonical, indent = indent, wrap = wrap,
+        expand_if = expand_if, brace_style = brace_style,
+        line_limit = line_limit, postprocess = FALSE)
 }
 
 #' Reformat Function Definitions
@@ -273,7 +308,7 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
     # Process one function at a time, re-parsing each time
     # to handle line number changes
     changed <- TRUE
-    max_iterations <- 50
+    max_iterations <- iteration_budget(code, 200L, mode = "funcdef")
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -333,6 +368,17 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
     for (fi in func_indices) {
         func_tok <- terminals[fi,]
         func_line <- func_tok$line1
+
+        # Only rewrite function definitions assigned to a name. Anonymous
+        # function literals in defaults/calls are too unstable here.
+        prev_idx <- fi - 1L
+        while (prev_idx >= 1L && terminals$token[prev_idx] == "COMMENT") {
+            prev_idx <- prev_idx - 1L
+        }
+        prev_tok <- if (prev_idx >= 1L) terminals$token[prev_idx] else NA_character_
+        if (!(prev_tok %in% c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
+            next
+        }
 
         # Find the opening ( after function
         next_idx <- fi + 1
@@ -626,7 +672,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
 #' @keywords internal
 reformat_inline_if <- function (code, line_limit = 0L) {
     changed <- TRUE
-    max_iterations <- 100
+    max_iterations <- iteration_budget(code, 100L, mode = "inline_if")
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -718,7 +764,7 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
             seq_len(nrow(terminals)) < i,]
         if (nrow(var_tokens) == 0) { next }
 
-        var_name <- paste(var_tokens$text, collapse = "")
+        var_name <- format_line_tokens(var_tokens)
 
         # Find opening paren after IF
         open_paren_idx <- if_idx + 1
@@ -1213,6 +1259,72 @@ format_blank_lines <- function (code) {
     code
 }
 
+#' Parse Gate for Transform Passes
+#'
+#' @param code Code string.
+#' @return TRUE if code parses, FALSE otherwise.
+#' @keywords internal
+is_parseable_code <- function (code) {
+    !is.null(tryCatch(parse(text = code, keep.source = TRUE),
+        error = function (e) NULL))
+}
+
+#' Apply Transform Only If Output Parses
+#'
+#' @param code Code string.
+#' @param fn Transform function taking `code` as first argument.
+#' @param ... Additional arguments passed to `fn`.
+#' @return Transformed code if parseable, otherwise original code.
+#' @keywords internal
+apply_if_parseable <- function (code, fn, ...) {
+    updated <- tryCatch(
+        fn(code, ...),
+        error = function (e) code
+    )
+
+    if (!is.character(updated) || length(updated) != 1L) {
+        return(code)
+    }
+
+    if (!identical(updated, code) && !is_parseable_code(updated)) {
+        return(code)
+    }
+
+    updated
+}
+
+#' Size-Aware Iteration Budget
+#'
+#' Limits expensive parse/rewrite loops on very large files.
+#'
+#' @param code Code string.
+#' @param default_max Default maximum iterations.
+#' @param mode Rewrite family. One of `"collapse"`, `"funcdef"`,
+#'   `"control"`, `"wrap"`, `"inline_if"`, or `"generic"`.
+#' @return Integer iteration budget.
+#' @keywords internal
+iteration_budget <- function (code, default_max, mode = "generic") {
+    n_lines <- length(strsplit(code, "\n", fixed = TRUE)[[1]])
+    # On very large files, one-at-a-time parse/rewrite loops are too costly
+    # and can remain non-idempotent under tight timeout budgets. In that
+    # regime we keep only the base token formatting pass.
+    if (n_lines > 1500L) {
+        return(0L)
+    }
+    # For medium/large files we disable one-change-at-a-time structural
+    # rewrites that are the main source of non-idempotent drift.
+    if (n_lines > 250L && mode %in% c("collapse", "funcdef", "control")) {
+        return(0L)
+    }
+    if (n_lines > 600L) {
+        return(min(default_max, 6L))
+    }
+    if (n_lines > 250L) {
+        return(min(default_max, 12L))
+    }
+    default_max
+}
+
 #' Collapse Multi-Line Function Calls
 #'
 #' Collapses function calls spanning multiple lines into a single line.
@@ -1228,7 +1340,7 @@ format_blank_lines <- function (code) {
 #' @keywords internal
 collapse_calls <- function (code) {
     changed <- TRUE
-    max_iterations <- 100
+    max_iterations <- iteration_budget(code, 100L, mode = "collapse")
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -1387,7 +1499,7 @@ collapse_one_call <- function (code) {
 #' @keywords internal
 wrap_long_calls <- function (code, line_limit = 80L) {
     changed <- TRUE
-    max_iterations <- 100
+    max_iterations <- iteration_budget(code, 100L, mode = "wrap")
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -1640,7 +1752,7 @@ fix_else_placement <- function (code) {
 #' @keywords internal
 add_control_braces <- function (code) {
     changed <- TRUE
-    max_iterations <- 200
+    max_iterations <- iteration_budget(code, 200L, mode = "control")
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -1859,6 +1971,19 @@ add_one_control_brace <- function (code) {
         # If body spans multiple lines, skip to avoid collapsing blocks
         body_span_end <- max(body_tokens$line2)
         if (body_span_end > body_start$line1) { next }
+        # Conservative guard: avoid rewriting complex one-liners where
+        # nested control/function expressions can be mis-associated with
+        # the outer `if`/`for`/`while`.
+        complex_body_tokens <- c("IF", "ELSE", "FOR", "WHILE", "FUNCTION")
+        if (any(body_tokens$token %in% complex_body_tokens)) { next }
+        # Skip incomplete tail expressions that continue on the next line.
+        continuation_tail_tokens <- c("LEFT_ASSIGN", "EQ_ASSIGN",
+            "RIGHT_ASSIGN", "'+'", "'-'", "'*'", "'/'", "'^'", "SPECIAL",
+            "AND", "OR", "AND2", "OR2", "GT", "LT", "GE", "LE", "EQ",
+            "NE", "'~'", "','")
+        if (body_tokens$token[nrow(body_tokens)] %in% continuation_tail_tokens) {
+            next
+        }
         body_has_comment <- any(body_tokens$token == "COMMENT")
         body_text <- format_line_tokens(body_tokens)
 
@@ -1984,6 +2109,13 @@ add_one_control_brace <- function (code) {
                 }
 
                 else_body_tokens <- terminals[else_body_idx:else_end_idx,]
+                if (any(else_body_tokens$token %in% complex_body_tokens)) {
+                    next
+                }
+                if (else_body_tokens$token[nrow(else_body_tokens)] %in%
+                    continuation_tail_tokens) {
+                    next
+                }
                 else_has_comment <- any(else_body_tokens$token == "COMMENT")
                 else_body_text <- format_line_tokens(else_body_tokens)
                 else_end_line <- terminals$line1[else_end_idx]
@@ -2049,7 +2181,7 @@ add_one_control_brace <- function (code) {
 #' @keywords internal
 wrap_long_operators <- function (code, line_limit = 80L) {
     changed <- TRUE
-    max_iterations <- 100
+    max_iterations <- iteration_budget(code, 100L, mode = "wrap")
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1

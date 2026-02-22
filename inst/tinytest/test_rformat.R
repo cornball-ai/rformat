@@ -506,3 +506,37 @@ expect_true(
   grepl("else \\{", result),
   info = "Braced false body should be preserved, not inlined"
 )
+
+# --- Bug D: nested if-assignment with outer else stays idempotent ---
+code <- "if (is.logical(labels))
+    labels <- if (labels) format(at, trim = TRUE) else NULL
+else if (at.missing)
+    warning(\"specifying 'labels' but not 'at' may lead to unexpected results\")"
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(
+  r1, r2,
+  info = "Nested if-assignment with outer else should be idempotent"
+)
+
+# --- Bug E: expanded inline-if keeps formatted LHS ---
+code <- "cmap[ii+k, j] <- if(tmap[i+1,j]==0) 0L else tmap[i+1,j]*mult +k"
+r1 <- rformat(code, expand_if = TRUE)
+r2 <- rformat(r1, expand_if = TRUE)
+expect_equal(
+  r1, r2,
+  info = "Inline-if expansion should keep LHS spacing/idempotence"
+)
+expect_true(
+  grepl("cmap\\[ii \\+ k, j\\]", r1),
+  info = "Expanded inline-if should format subscript spacing in LHS"
+)
+
+# --- Bug F: inline anonymous function argument stays idempotent ---
+code <- "lines.Lines <- function (x, y = NULL, ...) invisible(lapply(x@Lines, function (x, ...) lines(x, ...), ...))"
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(
+  r1, r2,
+  info = "Inline anonymous function arguments should stay idempotent"
+)
