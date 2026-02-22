@@ -1,0 +1,4 @@
+<text>:23:63: unexpected symbol
+22:           distribution = qunif,
+23:           panel = function (...) { panel.grid(h = -1, v = -1) panel.qqmath
+                                                                  ^

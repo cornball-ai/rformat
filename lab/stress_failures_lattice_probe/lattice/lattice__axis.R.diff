@@ -1,0 +1,12 @@
+--- lab/stress_failures_lattice_probe/lattice/lattice__axis.R.fmt1.R	2026-02-21 20:32:12.632439484 -0600
++++ lab/stress_failures_lattice_probe/lattice/lattice__axis.R.fmt2.R	2026-02-21 20:32:12.632466916 -0600
+@@ -530,8 +530,7 @@
+     ## get labels from at if unspecified
+     if (is.logical(labels))
+     labels <-
+-    if (labels) { format(at, trim = TRUE) } else { NULL }
+-    else if (at.missing)
++    if (labels) { format(at, trim = TRUE) } else { NULL } else if (at.missing)
+     warning("specifying 'labels' but not 'at' may lead to unexpected results")
+ 
+     if (check.overlap) ## remove ticks close to limits

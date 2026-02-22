@@ -1,0 +1,23 @@
+--- lab/stress_failures/tinytest/tinytest__setup.R.fmt1.R	2026-02-22 00:18:54.132313637 -0600
++++ lab/stress_failures/tinytest/tinytest__setup.R.fmt2.R	2026-02-22 00:18:54.132330973 -0600
+@@ -112,9 +112,9 @@
+     suggested <- trimws(strsplit(dcf[1, "Suggests"], ",")[[1]])
+     if (any(other_test_package %in% suggested)) {
+         pkgs <- paste(other_test_package[other_test_package %in% suggested],
+-                      collapse = ", ")
++            collapse = ", ")
+         catf("You may want to remove the following packages from DESCRIPTION/Suggests: %s\n",
+-             pkgs)
++            pkgs)
+     }
+ 
+     invisible(NULL)
+@@ -134,7 +134,7 @@
+ puppy <- function (pkgdir, force = FALSE, verbose = TRUE) {
+     setup_tinytest(pkgdir = pkgdir, force = force, verbose = verbose)
+     catf("\nThank you %s, for showing us some PUPPY LOVE <3\n",
+-         Sys.info()["user"])
++        Sys.info()["user"])
+     catf(doggy)
+ }
+ 

@@ -1,0 +1,13 @@
+--- lab/stress_failures/data.table/data.table__mergelist.R.fmt1.R	2026-02-22 00:19:45.403744666 -0600
++++ lab/stress_failures/data.table/data.table__mergelist.R.fmt2.R	2026-02-22 00:19:45.403767521 -0600
+@@ -383,8 +383,8 @@
+     out.mem <- vapply_1c(out, address)
+     if (copy)
+     .Call(CcopyCols, out,
+-          colnamesInt(out,
+-                      names(out.mem)[out.mem %chin% unique(unlist(l.mem, recursive = FALSE))]))
++        colnamesInt(out,
++            names(out.mem)[out.mem %chin% unique(unlist(l.mem, recursive = FALSE))]))
+     if (verbose)
+     catf("mergelist: merging %d tables, took %.3fs\n", n, proc.time()[[3L]] - p)
+     out

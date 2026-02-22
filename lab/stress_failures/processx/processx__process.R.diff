@@ -1,0 +1,12 @@
+--- lab/stress_failures/processx/processx__process.R.fmt1.R	2026-02-21 14:18:26.523367574 -0600
++++ lab/stress_failures/processx/processx__process.R.fmt2.R	2026-02-21 14:18:26.523390238 -0600
+@@ -659,8 +659,7 @@
+         tree_id = NULL,
+ 
+         get_short_name = function () process_get_short_name(self, private),
+-        close_connections = function ()
+-        process_close_connections(self, private)
++        close_connections = function () process_close_connections(self, private)
+     )
+ )
+ 

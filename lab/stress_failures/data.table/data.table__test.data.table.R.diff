@@ -1,0 +1,228 @@
+--- lab/stress_failures/data.table/data.table__test.data.table.R.fmt1.R	2026-02-22 00:20:14.574074017 -0600
++++ lab/stress_failures/data.table/data.table__test.data.table.R.fmt2.R	2026-02-22 00:20:14.574104496 -0600
+@@ -377,10 +377,10 @@
+         catf("Skipped %d tests for translated messages. ", nskip) # nocov
+     }
+     catf("All %d tests (last %.8g) in %s completed ok in %s\n", ntest,
+-         env$prevtest, names(fn), timetaken(env$started.at))
++        env$prevtest, names(fn), timetaken(env$started.at))
+     ans <- nfail == 0L
+     attr(ans,
+-         "timings") <- timings # as attr to not upset callers who expect a TRUE/FALSE result
++        "timings") <- timings # as attr to not upset callers who expect a TRUE/FALSE result
+     invisible(ans)
+ }
+ 
+@@ -392,14 +392,14 @@
+     makeString <- function (x) paste(x,
+                                      collapse = ",") # essentially toString.default
+     cn <- paste0(" [Key=", makeString(key(DT)), " Types=",
+-                 makeString(substr(vapply_1c(DT, typeof), 1L, 3L)),
+-                 " Classes=", makeString(classes), "]")
++        makeString(substr(vapply_1c(DT, typeof), 1L, 3L)),
++        " Classes=", makeString(classes), "]")
+     if (nrow(DT)) {
+         print(copy(DT)[, (cn) := "", verbose = FALSE], topn = topn,
+-              class = FALSE)
++            class = FALSE)
+     } else {
+         print(DT,
+-              class = FALSE) # "Empty data.table (0 rows) of <ncol> columns ...
++            class = FALSE) # "Empty data.table (0 rows) of <ncol> columns ...
+         if (ncol(DT)) {
+             cat(cn, "\n") # notranslate
+         }
+@@ -451,15 +451,15 @@
+     # 3) each test has a unique id which we refer to in commit messages, emails etc.
+     # 4) test that a query generates exactly 2 warnings, that they are both the correct warning messages, and that the result is the one expected
+     nfail <- get0("nfail",
+-                  parent.frame()) # test() can be used inside functions defined in tests.Rraw, so inherits=TRUE (default) here
++        parent.frame()) # test() can be used inside functions defined in tests.Rraw, so inherits=TRUE (default) here
+     .test.data.table <- !is.null(nfail)
+     numStr <- sprintf("%.8g", num)
+     if (.test.data.table) {
+         prevtest <- get("prevtest", parent.frame())
+         whichfail <- get("whichfail", parent.frame())
+         assign("ntest",
+-               get("ntest", parent.frame()) + if (num > 0.0) 1L else 0L,
+-               parent.frame(), inherits = TRUE) # bump number of tests run
++            get("ntest", parent.frame()) + if (num > 0.0) 1L else 0L,
++            parent.frame(), inherits = TRUE) # bump number of tests run
+         lasttime <- get("lasttime", parent.frame())
+         timings <- get("timings", parent.frame())
+         memtest <- get("memtest", parent.frame())
+@@ -473,19 +473,19 @@
+         if (num > 0.0) on.exit({
+             took <- proc.time()[3L] - lasttime # so that prep time between tests is attributed to the following test
+             timings[as.integer(num), `:=`(time = time + took,
+-                                          nTest = nTest + 1L), verbose = FALSE]
++                    nTest = nTest + 1L), verbose = FALSE]
+             if (memtest) {
+                 if (memtest == 1L) gc() # see #5515 for before/after
+                 inum <- as.integer(num)
+                 timings[inum, RSS := max(rss(),
+-                                         RSS), verbose = FALSE] # TODO prefix inum with .. for clarity when that works
++                        RSS), verbose = FALSE] # TODO prefix inum with .. for clarity when that works
+                 if (length(memtest.id) && memtest.id[1L] <= inum &&
+                     inum <= memtest.id[2L]) cat(rss(),
+-                                                "\n") # notranslate. after 'testing id ...' output; not using between() as it has verbose output when getOption(datatable.verbose)
++                    "\n") # notranslate. after 'testing id ...' output; not using between() as it has verbose output when getOption(datatable.verbose)
+                 if (memtest == 2L) gc()
+             }
+             assign("lasttime", proc.time()[3L], parent.frame(),
+-                   inherits = TRUE) # after gc() to exclude gc() time from next test when memtest
++                inherits = TRUE) # after gc() to exclude gc() time from next test when memtest
+             }, add = TRUE)
+         if (showProgress) {
+             # nocov start
+@@ -509,7 +509,7 @@
+     }
+     if (!missing(error) && !missing(y))
+     stopf("Test %s is invalid: when error= is provided it does not make sense to pass y as well",
+-          numStr) # nocov
++        numStr) # nocov
+ 
+     string_match <- function (x, y, ignore.case = FALSE) {
+         length(grep(x, y, fixed = TRUE)) ||
+@@ -540,7 +540,7 @@
+     }
+     if (!is.null(options)) {
+         old_options <- do.call(base::options,
+-                               as.list(options)) # as.list(): allow passing named character vector for convenience
++            as.list(options)) # as.list(): allow passing named character vector for convenience
+         on.exit(base::options(old_options), add = TRUE)
+     }
+     if (is.null(output) && is.null(notOutput)) {
+@@ -577,19 +577,19 @@
+             # if a warning containing this string occurs, ignore it. First need for #4182 where warning about 'timedatectl' only
+             # occurs in R 3.4, and maybe only on docker too not for users running test.data.table().
+             stopifnot(is.character(ignore.warning), !anyNA(ignore.warning),
+-                      nchar(ignore.warning) >= 1L)
++                nchar(ignore.warning) >= 1L)
+             for (msg in ignore.warning) {
+                 observed <- grepv(msg, observed,
+-                                  invert = TRUE) # allow multiple for translated messages rather than relying on '|' to always work
++                    invert = TRUE) # allow multiple for translated messages rather than relying on '|' to always work
+             }
+         }
+         if (length(expected) != length(observed) &&
+             (!foreign || is.null(ignore.warning))) {
+             # nocov start
+             catf("Test %s produced %d %ss but expected %d\n%s\n%s\n", numStr,
+-                 length(observed), type, length(expected),
+-                 paste("Expected:", expected),
+-                 paste("Observed:", observed, collapse = "\n"))
++                length(observed), type, length(expected),
++                paste("Expected:", expected),
++                paste("Observed:", observed, collapse = "\n"))
+             fail <- TRUE
+             # nocov end
+         } else if (!foreign) {
+@@ -598,7 +598,7 @@
+                 if (!string_match(expected[i], observed[i])) {
+                     # nocov start
+                     catf("Test %s didn't produce the correct %s:\nExpected: %s\nObserved: %s\n",
+-                         numStr, type, expected[i], observed[i])
++                        numStr, type, expected[i], observed[i])
+                     fail <- TRUE
+                     # nocov end
+                 }
+@@ -615,19 +615,19 @@
+         if (out[length(out)] == "NULL") { out <- out[-length(out)] }
+         out <- paste(out, collapse = "\n")
+         output <- paste(output,
+-                        collapse = "\n") # so that output= can be either a \n separated string, or a vector of strings.
++            collapse = "\n") # so that output= can be either a \n separated string, or a vector of strings.
+         # it also happens to turn off the 'y' checking branch below
+         if (length(output) && !foreign && !string_match(output, out)) {
+             # nocov start
+             catf("Test %s did not produce correct output:\n", numStr)
+             catf("Expected: <<%s>>\n",
+-                 encodeString(output)) # \n printed as '\\n' so the two lines of output can be compared vertically
++                encodeString(output)) # \n printed as '\\n' so the two lines of output can be compared vertically
+             catf("Observed: <<%s>>\n", encodeString(out))
+             if (anyNonAscii(output) || anyNonAscii((out))) {
+                 catf("Expected (raw): <<%s>>\n",
+-                     paste(charToRaw(output), collapse = " "))
++                    paste(charToRaw(output), collapse = " "))
+                 catf("Observed (raw): <<%s>>\n",
+-                     paste(charToRaw(out), collapse = " "))
++                    paste(charToRaw(out), collapse = " "))
+             }
+             fail <- TRUE
+             # nocov end
+@@ -637,12 +637,13 @@
+             # nocov start
+             catf("Test %s produced output but should not have:\n", numStr)
+             catf("Expected absent (case insensitive): <<%s>>\n",
+-                 encodeString(notOutput))
++                encodeString(notOutput))
+             catf("Observed: <<%s>>\n", encodeString(out))
+             if (anyNonAscii(notOutput) || anyNonAscii((out))) {
+                 catf("Expected absent (raw): <<%s>>\n",
+-                     paste(charToRaw(notOutput), collapse = " "))
+-                catf("Observed (raw): <<%s>>\n", paste(charToRaw(out), collapse = " "))
++                    paste(charToRaw(notOutput), collapse = " "))
++                catf("Observed (raw): <<%s>>\n",
++                     paste(charToRaw(out), collapse = " "))
+             }
+             fail <- TRUE
+             # nocov end
+@@ -659,7 +660,8 @@
+             if ((is.data.table(x) && !selfrefok(x)) ||
+                 (is.data.table(y) && !selfrefok(y))) {
+                 # nocov start
+-                catf("Test %s ran without errors but selfrefok(%s) is FALSE\n", numStr, if (selfrefok(x)) "y" else "x")
++                catf("Test %s ran without errors but selfrefok(%s) is FALSE\n",
++                     numStr, if (selfrefok(x)) "y" else "x")
+                 fail <- TRUE
+                 # nocov end
+             } else {
+@@ -669,10 +671,12 @@
+                 if (length(x)) for (i in which(vapply_1b(x, is.factor))) { .xi <- x[[i]]; xc[[i]] <- factor(.xi) }
+                 if (length(y)) for (i in which(vapply_1b(y, is.factor))) { .yi <- y[[i]]; yc[[i]] <- factor(.yi) }
+                 if (is.data.table(xc)) {
+-                    setattr(xc, "row.names", NULL) # for test 165+, i.e. x may have row names set from inheritance but y won't, consider these equal
++                    setattr(xc, "row.names",
++                            NULL) # for test 165+, i.e. x may have row names set from inheritance but y won't, consider these equal
+                 }
+                 if (is.data.table(yc)) { setattr(yc, "row.names", NULL) }
+-                setattr(xc, "index", NULL) # too onerous to create test RHS with the correct index as well, just check result
++                setattr(xc, "index",
++                        NULL) # too onerous to create test RHS with the correct index as well, just check result
+                 setattr(yc, "index", NULL)
+                 setattr(xc, ".internal.selfref", NULL) # test 2212
+                 setattr(yc, ".internal.selfref", NULL)
+@@ -693,15 +697,19 @@
+         # For test 617 on r-prerel-solaris-sparc on 7 Mar 2013
+         # nocov start
+         if (!fail) {
+-            catf("Test %s ran without errors but failed check that x equals y:\n", numStr)
++            catf("Test %s ran without errors but failed check that x equals y:\n",
++                 numStr)
+             failPrint <- function (x, xsub) {
+                 cat(">", substitute(x), "=", xsub, "\n") # notranslate
+                 if (is.data.table(x)) { compactprint(x) } else {
+                     nn <- length(x)
+-                    catf("First %d of %d (type '%s'): \n", min(nn, 6L), length(x), typeof(x))
++                    catf("First %d of %d (type '%s'): \n", min(nn, 6L),
++                         length(x), typeof(x))
+                     # head.matrix doesn't restrict columns
+                     if (length(d <- dim(x))) {
+-                        do.call(`[`, c(list(x, drop = FALSE), lapply(pmin(d, 6L), seq_len)))
++                        do.call(`[`,
++                                c(list(x, drop = FALSE),
++                                  lapply(pmin(d, 6L), seq_len)))
+                     } else {
+                         print(head(x))
+                     }
+@@ -721,7 +729,8 @@
+     if (fail && .test.data.table && num > 0.0) {
+         # nocov start
+         assign("nfail", nfail + 1L, parent.frame(), inherits = TRUE)
+-        assign("whichfail", c(whichfail, numStr), parent.frame(), inherits = TRUE)
++        assign("whichfail", c(whichfail, numStr), parent.frame(),
++               inherits = TRUE)
+         # nocov end
+     }
+     invisible(!fail)

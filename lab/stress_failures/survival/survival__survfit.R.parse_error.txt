@@ -1,0 +1,4 @@
+<text>:190:7: unexpected 'else'
+189:         if (is.matrix(x$surv)) { d2 <- ncol(x$surv) } else {
+190:     } else
+           ^
