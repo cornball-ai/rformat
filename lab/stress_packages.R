@@ -19,7 +19,7 @@ stress_packages <- c(
     "pkgdown", "covr", "remotes", "pak", "renv",
     # Data Import / Storage
     "readxl", "writexl", "DBI", "RSQLite", "duckdb",
-    "arrow", "sparklyr", "pins", "qs", "fst",
+    "arrow", "sparklyr", "pins", "qs2", "fst",
     # Time Series / Specialized
     "forecast", "zoo", "xts", "tsibble", "fable",
     "igraph", "sf", "terra", "sp", "rmarkdown",

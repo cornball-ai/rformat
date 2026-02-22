@@ -110,9 +110,18 @@ rformat is designed around three invariants:
 
 3. **Idempotency.** Formatting is a fixed point: `rformat(rformat(x)) == rformat(x)`. This is enforced by a stress test suite that formats every file twice and diffs the results. Continuation indentation uses depth-based offsets (matching the initial indentation pass) rather than column-aligned positions, specifically to guarantee stability across passes.
 
+### Conservative Transforms
+
+Structural rewrites (collapsing calls, adding braces, wrapping long lines, reformatting function definitions) are applied conservatively:
+
+- Every transform pass is wrapped in a **parse gate** — if the result doesn't parse, the original is kept.
+- Complex one-liner bodies (containing nested control flow or function literals) are left alone rather than risk mis-association.
+- Large files (>250 lines) get reduced iteration budgets for expensive rewrite loops; very large files (>1500 lines) skip structural rewrites entirely and receive only base token formatting.
+- Anonymous function literals inside calls are not reformatted — only named function definitions get signature/brace normalization.
+
 ### Stress Testing
 
-The test suite (`lab/stress_test.R`) downloads source tarballs from CRAN and formats every `.R` file, checking:
+The test suite (`lab/check_stress_pkgs.R`) formats every `.R` file from 100 CRAN source tarballs, checking:
 
 - **Parse gate**: formatted code must parse without errors
 - **Idempotency**: formatting twice produces identical output
