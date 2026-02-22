@@ -1,0 +1,4 @@
+<text>:391:9: unexpected '}'
+390:             lp <- lp + x[, -fcol, drop = FALSE] %*% coxfit$coef -
+391:         }
+             ^

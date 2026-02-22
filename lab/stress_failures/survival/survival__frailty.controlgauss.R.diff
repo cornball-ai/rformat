@@ -1,0 +1,11 @@
+--- lab/stress_failures/survival/survival__frailty.controlgauss.R.fmt1.R	2026-02-21 14:25:49.450869281 -0600
++++ lab/stress_failures/survival/survival__frailty.controlgauss.R.fmt2.R	2026-02-21 14:25:49.450883557 -0600
+@@ -28,7 +28,7 @@
+                     theta <- theta * 3
+                 } else {
+                     theta <- theta / 3 }
+-                }
++            }
+             list(theta = theta, done = FALSE, history = history)
+         } else {
+             history <- rbind(old$history, as.vector(c(theta, resid, fsum, trH)))

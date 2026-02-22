@@ -1,0 +1,11 @@
+--- lab/stress_failures/data.table/data.table__cedta.R.fmt1.R	2026-02-22 00:19:05.660024303 -0600
++++ lab/stress_failures/data.table/data.table__cedta.R.fmt2.R	2026-02-22 00:19:05.660048503 -0600
+@@ -70,7 +70,7 @@
+     (nsname == "utils" &&
+         (exists("debugger.look", parent.frame(n + 1L)) ||
+             (length(sc) >= 8L && sc[[length(sc) - 7L]] %iscall% 'example'))) ||
+-            # 'example' for #2972
++    # 'example' for #2972
+     (nsname == "base" && # lapply
+         (all(c("FUN", "X") %chin% ls(parent.frame(n))) ||
+             .any_sd_queries_in_stack(sc))) ||

@@ -1,0 +1,4 @@
+<text>:606:5: unexpected '}'
+605:         sf_use_s2() && inherits(x, "POLYGON") &&
+606:     }
+         ^

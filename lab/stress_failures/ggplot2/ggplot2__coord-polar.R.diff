@@ -1,0 +1,15 @@
+--- lab/stress_failures/ggplot2/ggplot2__coord-polar.R.fmt1.R	2026-02-21 14:08:23.450942349 -0600
++++ lab/stress_failures/ggplot2/ggplot2__coord-polar.R.fmt2.R	2026-02-21 14:08:23.451007349 -0600
+@@ -192,10 +192,10 @@
+                 theme, majorr, name = "radius",
+                 x = rep(rfine,
+                     each = length(thetafine)) * rep(sin(thetafine),
+-                        length(rfine)) + 0.5,
++                    length(rfine)) + 0.5,
+                 y = rep(rfine,
+                     each = length(thetafine)) * rep(cos(thetafine),
+-                        length(rfine)) + 0.5,
++                    length(rfine)) + 0.5,
+                 id.lengths = rep(length(thetafine), length(rfine)),
+                 default.units = "native"
+             )

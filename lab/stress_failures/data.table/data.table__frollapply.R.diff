@@ -1,0 +1,13 @@
+--- lab/stress_failures/data.table/data.table__frollapply.R.fmt1.R	2026-02-22 00:19:33.821209895 -0600
++++ lab/stress_failures/data.table/data.table__frollapply.R.fmt2.R	2026-02-22 00:19:33.821235973 -0600
+@@ -509,8 +509,8 @@
+             ans <- ans[[1L]] ## unpack atomic input
+         } else if (give.names) {
+             nms <- make.roll.names(x.len = nx, n.len = nn, n = orig$N,
+-                                   x.nm = xnam, n.nm = nnam, fun = "apply",
+-                                   adaptive = orig$adaptive)
++                x.nm = xnam, n.nm = nnam, fun = "apply",
++                adaptive = orig$adaptive)
+             setattr(ans, "names", nms)
+         }
+     }

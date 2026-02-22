@@ -1,0 +1,4 @@
+<text>:430:15: unexpected 'else'
+429:                 tryNum<-function(x){n <- x
+430:             } else
+                   ^

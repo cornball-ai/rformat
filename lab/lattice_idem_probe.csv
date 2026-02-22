@@ -1,0 +1,2 @@
+"package","r_files","parsed_before","formatted_ok","parse_failures","not_idempotent","timeouts","status","errors"
+"lattice",34,34,25,3,1,6,"FAIL","histogram.R, rfs.R, splom.R"
