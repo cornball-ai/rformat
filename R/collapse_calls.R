@@ -157,3 +157,4 @@ collapse_one_call <- function (code) {
 
     NULL
 }
+

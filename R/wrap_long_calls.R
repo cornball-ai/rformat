@@ -7,7 +7,7 @@
 #' @param line_limit Maximum line length (default 80).
 #' @return Code with wrapped long calls.
 #' @keywords internal
-wrap_long_calls <- function (code, line_limit = 80L) {
+wrap_long_calls <- function (code, wrap = "paren", line_limit = 80L) {
     changed <- TRUE
     max_iterations <- iteration_budget(code, 100L, mode = "wrap")
 
@@ -15,7 +15,7 @@ wrap_long_calls <- function (code, line_limit = 80L) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- wrap_one_long_call(code, line_limit = line_limit)
+        result <- wrap_one_long_call(code, wrap = wrap, line_limit = line_limit)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -34,7 +34,7 @@ wrap_long_calls <- function (code, line_limit = 80L) {
 #' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-wrap_one_long_call <- function (code, line_limit = 80L) {
+wrap_one_long_call <- function (code, wrap = "paren", line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
                        error = function (e) NULL)
 
@@ -212,9 +212,6 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         func_name <- terminals$text[ci]
 
-        # Continuation indent: align to opening paren column
-        cont_indent <- strrep(" ", nchar(prefix) + nchar(func_name) + 1)
-
         # Get suffix (everything after closing paren on the same line)
         close_col <- terminals$col2[close_idx]
         char_pos_close <- col_to_charpos(line_content, close_col)
@@ -222,6 +219,15 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
             suffix <- substring(line_content, char_pos_close + 1)
         } else {
             suffix <- ""
+        }
+
+        base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
+
+        # Paren-aligned continuation (default): align to opening paren
+        if (wrap == "paren") {
+            cont_indent <- strrep(" ", nchar(prefix) + nchar(func_name) + 1)
+        } else {
+            cont_indent <- paste0(base_indent, "    ")
         }
 
         # Build wrapped lines
@@ -250,9 +256,8 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         if (length(new_lines) < 2) { next }
 
         # If paren alignment pushed continuation lines over the limit,
-        # fall back to depth-based indent (base_indent + one level)
-        if (any(nchar(new_lines) > line_limit)) {
-            base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
+        # fall back to depth-based indent
+        if (wrap == "paren" && any(nchar(new_lines) > line_limit)) {
             cont_indent <- paste0(base_indent, "    ")
             new_lines <- character(0)
             current_line <- paste0(prefix, func_name, "(")
@@ -451,3 +456,4 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
 
     NULL
 }
+
