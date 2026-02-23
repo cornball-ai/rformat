@@ -40,30 +40,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
     is_large_file <- length(orig_lines) > 1500L
 
-    # Fix truncated string constants from getParseData()
-    # Long STR_CONST tokens (~1000+ chars) get truncated to
-    # '[N chars quoted with "..."]' — recover from source lines
-    for (i in seq_len(nrow(terminals))) {
-        tok <- terminals[i,]
-        if (tok$token == "STR_CONST" &&
-            grepl("^\\[\\d+ chars quoted", tok$text)) {
-            if (tok$line1 == tok$line2) {
-                terminals$text[i] <- substring(orig_lines[tok$line1],
-                    col_to_charpos(orig_lines[tok$line1], tok$col1),
-                    col_to_charpos(orig_lines[tok$line1], tok$col2))
-            } else {
-                parts <- c(
-                    substring(orig_lines[tok$line1],
-                              col_to_charpos(orig_lines[tok$line1], tok$col1)),
-                    if (tok$line2 > tok$line1 + 1) {
-                        orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
-                    },
-                    substring(orig_lines[tok$line2], 1,
-                              col_to_charpos(orig_lines[tok$line2], tok$col2)))
-                terminals$text[i] <- paste(parts, collapse = "\n")
-            }
-        }
-    }
+    terminals <- restore_truncated_str_const_tokens(terminals, orig_lines)
 
     # Track nesting for indentation
     brace_depth <- 0
@@ -75,9 +52,11 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     line_end_brace <- integer(max_line)
     line_end_paren <- integer(max_line)
     line_end_pab <- integer(max_line) # paren_at_brace top-of-stack
+    line_end_call_paren_col <- integer(max_line) # innermost open call '(' col
     # pab right after the first '}' on a line (before any subsequent '{').
     # Used for '} else {' lines where end-of-line pab includes the new '{'.
     line_pab_after_close <- integer(max_line)
+    call_paren_stack <- integer(0) # 0 = not a function call paren
 
     for (i in seq_len(nrow(terminals))) {
         tok <- terminals[i,]
@@ -136,8 +115,16 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 0L
             }
         } else if (tok$token %in% c("'('", "'['", "LBB")) {
+            if (tok$token == "'('") {
+                is_call_paren <- i > 1L &&
+                    terminals$token[i - 1L] == "SYMBOL_FUNCTION_CALL"
+                call_paren_stack <- c(call_paren_stack, if (is_call_paren) tok$col1 else 0L)
+            }
             paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
         } else if (tok$token %in% c("')'", "']'")) {
+            if (tok$token == "')'" && length(call_paren_stack) > 0) {
+                call_paren_stack <- call_paren_stack[-length(call_paren_stack)]
+            }
             paren_depth <- max(0, paren_depth - 1)
         }
 
@@ -148,6 +135,16 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         } else {
             0L
         }
+        if (length(call_paren_stack) > 0) {
+            open_calls <- call_paren_stack[call_paren_stack > 0L]
+            line_end_call_paren_col[ln] <- if (length(open_calls) > 0L) {
+                open_calls[length(open_calls)]
+            } else {
+                0L
+            }
+        } else {
+            line_end_call_paren_col[ln] <- 0L
+        }
     }
 
     # Fill in gaps (comment/blank lines inherit from previous)
@@ -157,6 +154,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 line_end_brace[ln] <- line_end_brace[ln - 1]
                 line_end_paren[ln] <- line_end_paren[ln - 1]
                 line_end_pab[ln] <- line_end_pab[ln - 1]
+                line_end_call_paren_col[ln] <- line_end_call_paren_col[ln - 1]
             }
         }
     }
@@ -243,6 +241,17 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             next
         }
 
+        cont_call_indent <- 0L
+        if (line_num > 1L && line_num <= max_line &&
+            line_end_call_paren_col[line_num - 1L] > 0L &&
+            grepl(",\\s*$", orig_lines[line_num - 1L])) {
+            first_tok <- line_tokens$token[1]
+            if (!first_tok %in% c("')'", "']'", "']]'",
+                                  "IF", "FOR", "WHILE", "REPEAT", "ELSE")) {
+                cont_call_indent <- max(0L, line_end_call_paren_col[line_num - 1L])
+            }
+        }
+
         if (nrow(line_tokens) == 1 && line_tokens$token[1] == "COMMENT") {
             if (grepl("^#'", trimws(line))) {
                 out_lines[line_num] <- trimws(line)
@@ -265,9 +274,13 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             line_level <- 0
         }
         formatted <- format_line_tokens(line_tokens)
+        if (cont_call_indent > 0L) {
+            line_prefix <- strrep(" ", cont_call_indent)
+        } else {
+            line_prefix <- paste0(rep(indent_str, line_level), collapse = "")
+        }
 
-        out_lines[line_num] <- paste0(
-            paste0(rep(indent_str, line_level), collapse = ""), formatted)
+        out_lines[line_num] <- paste0(line_prefix, formatted)
     }
 
     # Filter out NA lines (multi-line token continuations)
@@ -368,6 +381,50 @@ format_line_tokens <- function (tokens, prev_token = NULL,
     }
 
     paste(parts, collapse = "")
+}
+
+#' Restore Truncated String Constant Token Text
+#'
+#' `utils::getParseData()` truncates long `STR_CONST` token text. Reconstruct the
+#' original literal from source lines so token-based rewrite passes can round-trip
+#' long strings without introducing parse-invalid placeholders.
+#'
+#' @param terminals Terminal token data frame from `getParseData()`.
+#' @param orig_lines Original source lines.
+#' @return `terminals` with long `STR_CONST` text restored.
+#' @keywords internal
+restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
+    if (is.null(terminals) || nrow(terminals) == 0) {
+        return(terminals)
+    }
+
+    idx <- which(terminals$token == "STR_CONST" &
+        grepl("^\\[\\d+ chars quoted", terminals$text))
+    if (length(idx) == 0) {
+        return(terminals)
+    }
+
+    for (i in idx) {
+        tok <- terminals[i,]
+        if (tok$line1 == tok$line2) {
+            terminals$text[i] <- substring(orig_lines[tok$line1],
+                col_to_charpos(orig_lines[tok$line1], tok$col1),
+                col_to_charpos(orig_lines[tok$line1], tok$col2))
+        } else {
+            parts <- c(
+                substring(orig_lines[tok$line1],
+                          col_to_charpos(orig_lines[tok$line1], tok$col1)),
+                if (tok$line2 > tok$line1 + 1) {
+                    orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
+                },
+                substring(orig_lines[tok$line2], 1,
+                          col_to_charpos(orig_lines[tok$line2], tok$col2))
+            )
+            terminals$text[i] <- paste(parts, collapse = "\n")
+        }
+    }
+
+    terminals
 }
 
 #' Determine If Space Needed Between Tokens
@@ -664,4 +721,3 @@ iteration_budget <- function (code, default_max, mode = "generic") {
     }
     default_max
 }
-
