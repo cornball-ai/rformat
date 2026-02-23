@@ -114,8 +114,7 @@ add_one_control_brace <- function (code) {
                             terminals$col1 < terminals$col1[scan],]
                         if (nrow(root_before) > 0 &&
                             any(root_before$token %in% c("LEFT_ASSIGN",
-                                                         "EQ_ASSIGN",
-                                                         "RIGHT_ASSIGN"))) {
+                                "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
                             skip_chain <- TRUE
                         }
                         break
@@ -218,7 +217,7 @@ add_one_control_brace <- function (code) {
                 if (next_tok$line1 > btok$line1) {
                     # If current line ends with assignment, RHS continues
                     if (btok$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN",
-                                          "RIGHT_ASSIGN")) {
+                        "RIGHT_ASSIGN")) {
                         body_end_idx <- body_end_idx + 1
                         next
                     }
@@ -343,8 +342,9 @@ add_one_control_brace <- function (code) {
                 # the "if ..." part from the IF token's column onward
                 ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                 if_rest <- paste0(ctrl_indent,
-                    trimws(substring(lines[else_body_start$line1],
-                                     else_body_start$col1)))
+                                  trimws(substring(
+                                      lines[else_body_start$line1],
+                                      else_body_start$col1)))
                 if (body_has_comment || nchar(new_line) > 80L) {
                     new_lines_vec <- c(paste0(prefix, open_brace_suffix),
                                        paste0(inner_indent, body_text),

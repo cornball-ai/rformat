@@ -182,8 +182,11 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     out_call_paren_stack <- integer(0)
     # Per-line: output column of innermost open call '(' after processing
     out_call_paren_col <- integer(length(orig_lines))
-    # Whether the previous output line ended with a comma (for continuation)
-    prev_out_line_ends_comma <- FALSE
+    # Track brace depth relative to the innermost call paren.
+    # We only paren-align when no braces have opened since the call '('.
+    # Stack of brace depths at each call-paren open; current brace depth.
+    out_brace_depth <- 0L
+    out_brace_at_call_open <- integer(0) # brace_depth when each call ( opened
 
     # Track lines that are internal to multi-line tokens (e.g., multi-line strings)
     # A line should be skipped if:
@@ -228,9 +231,11 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         }
 
         # Paren-aligned continuation: use output column of innermost
-        # open call '(' from the previous line, if it ended with a comma
+        # open call '(' when no braces have opened since that call
         cont_call_indent <- 0L
-        if (wrap == "paren" && prev_out_line_ends_comma &&
+        inside_call_brace <- length(out_brace_at_call_open) > 0 &&
+        out_brace_depth > out_brace_at_call_open[length(out_brace_at_call_open)]
+        if (wrap == "paren" && !inside_call_brace &&
             length(out_call_paren_stack) > 0) {
             open_calls <- out_call_paren_stack[out_call_paren_stack > 0L]
             if (length(open_calls) > 0) {
@@ -264,10 +269,18 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             line_level <- 0
         }
         formatted <- format_line_tokens(line_tokens)
-        if (cont_call_indent > 0L) {
-            line_prefix <- strrep(" ", cont_call_indent)
+        depth_prefix <- paste0(rep(indent_str, line_level), collapse = "")
+        if (cont_call_indent > 0L && cont_call_indent <= line_limit %/% 2L) {
+            paren_prefix <- strrep(" ", cont_call_indent)
+            source_indent <- sub("\\S.*", "", line)
+            if (source_indent == depth_prefix && depth_prefix != paren_prefix) {
+                # Source has depth-based indent from wrap_long_calls fallback
+                line_prefix <- depth_prefix
+            } else {
+                line_prefix <- paren_prefix
+            }
         } else {
-            line_prefix <- paste0(rep(indent_str, line_level), collapse = "")
+            line_prefix <- depth_prefix
         }
 
         out_lines[line_num] <- paste0(line_prefix, formatted)
@@ -302,14 +315,21 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                     } else {
                         0L
                     })
+                out_brace_at_call_open <- c(out_brace_at_call_open,
+                    out_brace_depth)
             } else if (tt == "')'") {
                 if (length(out_call_paren_stack) > 0) {
                     out_call_paren_stack <-
                     out_call_paren_stack[-length(out_call_paren_stack)]
+                    out_brace_at_call_open <-
+                    out_brace_at_call_open[-length(out_brace_at_call_open)]
                 }
+            } else if (tt == "'{'") {
+                out_brace_depth <- out_brace_depth + 1L
+            } else if (tt == "'}'") {
+                out_brace_depth <- max(0L, out_brace_depth - 1L)
             }
         }
-        prev_out_line_ends_comma <- grepl(",\\s*$", out_lines[line_num])
     }
 
     # Filter out NA lines (multi-line token continuations)
@@ -487,7 +507,8 @@ restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
                     orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
                 },
                        substring(orig_lines[tok$line2], 1,
-                           col_to_charpos(orig_lines[tok$line2], tok$col2))
+                                 col_to_charpos(orig_lines[tok$line2],
+                                     tok$col2))
             )
             terminals$text[i] <- paste(parts, collapse = "\n")
         }
@@ -696,7 +717,8 @@ extract_expr_text <- function (lines, tokens, target_indent) {
     # First line: from first token to end of line
     first_tok <- tokens[tokens$line1 == start_line,][1,]
     first_line_text <- substring(lines[start_line],
-        col_to_charpos(lines[start_line], first_tok$col1))
+                                 col_to_charpos(lines[start_line],
+                                     first_tok$col1))
 
     # Middle lines: full line content, re-indented
     result_lines <- first_line_text
@@ -783,10 +805,10 @@ iteration_budget <- function (code, default_max, mode = "generic") {
         return(0L)
     }
     if (n_lines > 800L) {
-        return(min(default_max, 6L))
+        return(min(default_max, 50L))
     }
     if (n_lines > 400L) {
-        return(min(default_max, 25L))
+        return(min(default_max, 100L))
     }
     default_max
 }

@@ -123,16 +123,10 @@ collapse_one_call <- function (code) {
                 prev_prev_tok <- call_tokens[nrow(call_tokens) - 1,]
             }
             suffix <- format_line_tokens(after_close,
-                                         prev_token = last_call_tok,
-                                         prev_prev_token = prev_prev_tok)
+                prev_token = last_call_tok, prev_prev_token = prev_prev_tok)
         }
 
         full_line <- paste0(full_line, suffix)
-
-        # Also check if there are tokens before the function call on func_line
-        # that aren't part of the prefix (i.e., code tokens before the call)
-        before_call <- terminals[terminals$line1 == func_line &
-            terminals$col1 < func_col,]
 
         # Replace the lines
         if (func_line > 1) {
