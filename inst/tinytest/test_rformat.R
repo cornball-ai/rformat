@@ -576,6 +576,18 @@ expect_true(
 r2 <- rformat(r1)
 expect_equal(r1, r2, info = "Expanded bare if-else in call should be idempotent")
 
+# --- Paren-aligned call continuation is idempotent ---
+code <- 'f <- function () {\n    dataValue <- shiny::restoreInput(id = "sidebarCollapsed", default = collapsed)\n}'
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(r1, r2,
+             info = "Paren-aligned call continuation should be idempotent")
+expect_true(
+    grepl("restoreInput\\(id = \"sidebarCollapsed\",\n\\s+default",
+          r1),
+    info = "Long call should be wrapped at comma"
+)
+
 # Short if-else in call stays inline
 code <- "x <- c(if (a) b else d, e)"
 r1 <- rformat(code)

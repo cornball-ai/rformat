@@ -52,11 +52,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     line_end_brace <- integer(max_line)
     line_end_paren <- integer(max_line)
     line_end_pab <- integer(max_line) # paren_at_brace top-of-stack
-    line_end_call_paren_col <- integer(max_line) # innermost open call '(' col
     # pab right after the first '}' on a line (before any subsequent '{').
     # Used for '} else {' lines where end-of-line pab includes the new '{'.
     line_pab_after_close <- integer(max_line)
-    call_paren_stack <- integer(0) # 0 = not a function call paren
 
     for (i in seq_len(nrow(terminals))) {
         tok <- terminals[i,]
@@ -115,16 +113,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 0L
             }
         } else if (tok$token %in% c("'('", "'['", "LBB")) {
-            if (tok$token == "'('") {
-                is_call_paren <- i > 1L &&
-                    terminals$token[i - 1L] == "SYMBOL_FUNCTION_CALL"
-                call_paren_stack <- c(call_paren_stack, if (is_call_paren) tok$col1 else 0L)
-            }
             paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
         } else if (tok$token %in% c("')'", "']'")) {
-            if (tok$token == "')'" && length(call_paren_stack) > 0) {
-                call_paren_stack <- call_paren_stack[-length(call_paren_stack)]
-            }
             paren_depth <- max(0, paren_depth - 1)
         }
 
@@ -135,16 +125,6 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         } else {
             0L
         }
-        if (length(call_paren_stack) > 0) {
-            open_calls <- call_paren_stack[call_paren_stack > 0L]
-            line_end_call_paren_col[ln] <- if (length(open_calls) > 0L) {
-                open_calls[length(open_calls)]
-            } else {
-                0L
-            }
-        } else {
-            line_end_call_paren_col[ln] <- 0L
-        }
     }
 
     # Fill in gaps (comment/blank lines inherit from previous)
@@ -154,7 +134,6 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 line_end_brace[ln] <- line_end_brace[ln - 1]
                 line_end_paren[ln] <- line_end_paren[ln - 1]
                 line_end_pab[ln] <- line_end_pab[ln - 1]
-                line_end_call_paren_col[ln] <- line_end_call_paren_col[ln - 1]
             }
         }
     }
@@ -198,6 +177,13 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         indent_str <- strrep(" ", indent)
     }
     out_lines <- character(length(orig_lines))
+    # Track open call-paren output columns for paren-aligned continuation.
+    # Stack of character positions (1-based) of '(' in output lines.
+    out_call_paren_stack <- integer(0)
+    # Per-line: output column of innermost open call '(' after processing
+    out_call_paren_col <- integer(length(orig_lines))
+    # Whether the previous output line ended with a comma (for continuation)
+    prev_out_line_ends_comma <- FALSE
 
     # Track lines that are internal to multi-line tokens (e.g., multi-line strings)
     # A line should be skipped if:
@@ -241,14 +227,18 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             next
         }
 
+        # Paren-aligned continuation: use output column of innermost
+        # open call '(' from the previous line, if it ended with a comma
         cont_call_indent <- 0L
-        if (line_num > 1L && line_num <= max_line &&
-            line_end_call_paren_col[line_num - 1L] > 0L &&
-            grepl(",\\s*$", orig_lines[line_num - 1L])) {
-            first_tok <- line_tokens$token[1]
-            if (!first_tok %in% c("')'", "']'", "']]'",
-                                  "IF", "FOR", "WHILE", "REPEAT", "ELSE")) {
-                cont_call_indent <- max(0L, line_end_call_paren_col[line_num - 1L])
+        if (wrap == "paren" && prev_out_line_ends_comma &&
+            length(out_call_paren_stack) > 0) {
+            open_calls <- out_call_paren_stack[out_call_paren_stack > 0L]
+            if (length(open_calls) > 0) {
+                first_tok <- line_tokens$token[1]
+                if (!first_tok %in% c("')'", "']'", "']]'", "IF", "FOR",
+                                      "WHILE", "REPEAT", "ELSE", "'}'")) {
+                    cont_call_indent <- open_calls[length(open_calls)]
+                }
             }
         }
 
@@ -281,6 +271,45 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         }
 
         out_lines[line_num] <- paste0(line_prefix, formatted)
+
+        # Update output call-paren stack using this line's tokens.
+        # Compute each token's output column from the formatted line.
+        prefix_len <- nchar(line_prefix)
+        for (ti in seq_len(nrow(line_tokens))) {
+            tt <- line_tokens$token[ti]
+            if (tt == "'('") {
+                # Is this a call paren? Check if preceded by SYMBOL_FUNCTION_CALL
+                is_call <- ti > 1L &&
+                line_tokens$token[ti - 1L] == "SYMBOL_FUNCTION_CALL"
+                if (!is_call && ti == 1L) {
+                    # Check the last token from the previous line
+                    # (already in the global terminals order)
+                    global_idx <- which(terminals$line1 == line_num &
+                        terminals$col1 == line_tokens$col1[ti])
+                    if (length(global_idx) > 0 && global_idx[1] > 1L) {
+                        prev_tok <- terminals$token[global_idx[1] - 1L]
+                        is_call <- prev_tok == "SYMBOL_FUNCTION_CALL"
+                    }
+                }
+                # Compute output column: prefix + position in formatted string
+                # The formatted string has tokens in order; find this token's
+                # position by rebuilding up to this point
+                tok_output_col <- prefix_len +
+                find_token_pos_in_formatted(line_tokens, ti)
+                out_call_paren_stack <- c(out_call_paren_stack,
+                    if (is_call) {
+                        tok_output_col
+                    } else {
+                        0L
+                    })
+            } else if (tt == "')'") {
+                if (length(out_call_paren_stack) > 0) {
+                    out_call_paren_stack <-
+                    out_call_paren_stack[-length(out_call_paren_stack)]
+                }
+            }
+        }
+        prev_out_line_ends_comma <- grepl(",\\s*$", out_lines[line_num])
     }
 
     # Filter out NA lines (multi-line token continuations)
@@ -309,7 +338,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Wrap long lines at operators (||, &&), then at commas
     result <- apply_if_parseable(result, wrap_long_operators,
                                  line_limit = line_limit)
-    result <- apply_if_parseable(result, wrap_long_calls,
+    result <- apply_if_parseable(result, wrap_long_calls, wrap = wrap,
                                  line_limit = line_limit)
 
     # Reformat function definitions
@@ -334,7 +363,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     # Final wrap pass: earlier passes may have produced new long lines
     result <- apply_if_parseable(result, wrap_long_operators,
                                  line_limit = line_limit)
-    result <- apply_if_parseable(result, wrap_long_calls,
+    result <- apply_if_parseable(result, wrap_long_calls, wrap = wrap,
                                  line_limit = line_limit)
     result
 }
@@ -383,6 +412,46 @@ format_line_tokens <- function (tokens, prev_token = NULL,
     paste(parts, collapse = "")
 }
 
+#' Find Token Position in Formatted Line Output
+#'
+#' Computes the 1-based character position where the token at index `idx`
+#' starts in the output of `format_line_tokens(tokens)`. This replays the
+#' spacing logic to determine the exact output column.
+#'
+#' @param tokens Data frame of tokens for one line (ordered by col1).
+#' @param idx Index into `tokens` of the target token.
+#' @return 1-based character position of that token in the formatted output.
+#' @keywords internal
+find_token_pos_in_formatted <- function (tokens, idx) {
+    pos <- 1L
+    prev <- NULL
+    prev_prev <- NULL
+
+    for (i in seq_len(nrow(tokens))) {
+        tok <- tokens[i,]
+        tok_text <- tok$text
+        if (tok$token == "EQ_ASSIGN") {
+            tok_text <- "<-"
+        }
+
+        if (!is.null(prev)) {
+            if (needs_space(prev, tok, prev_prev)) {
+                pos <- pos + 1L
+            }
+        }
+
+        if (i == idx) {
+            return(pos)
+        }
+
+        pos <- pos + nchar(tok_text)
+        prev_prev <- prev
+        prev <- tok
+    }
+
+    pos
+}
+
 #' Restore Truncated String Constant Token Text
 #'
 #' `utils::getParseData()` truncates long `STR_CONST` token text. Reconstruct the
@@ -417,8 +486,8 @@ restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
                 if (tok$line2 > tok$line1 + 1) {
                     orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
                 },
-                substring(orig_lines[tok$line2], 1,
-                          col_to_charpos(orig_lines[tok$line2], tok$col2))
+                       substring(orig_lines[tok$line2], 1,
+                           col_to_charpos(orig_lines[tok$line2], tok$col2))
             )
             terminals$text[i] <- paste(parts, collapse = "\n")
         }
@@ -721,3 +790,4 @@ iteration_budget <- function (code, default_max, mode = "generic") {
     }
     default_max
 }
+
