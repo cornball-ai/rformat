@@ -224,8 +224,9 @@ wrap_one_long_call <- function (code, wrap = "paren", line_limit = 80L) {
         base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
 
         # Paren-aligned continuation (default): align to opening paren
-        if (wrap == "paren") {
-            cont_indent <- strrep(" ", nchar(prefix) + nchar(func_name) + 1)
+        paren_col <- nchar(prefix) + nchar(func_name) + 1
+        if (wrap == "paren" && paren_col <= line_limit %/% 2L) {
+            cont_indent <- strrep(" ", paren_col)
         } else {
             cont_indent <- paste0(base_indent, "    ")
         }
@@ -254,31 +255,6 @@ wrap_one_long_call <- function (code, wrap = "paren", line_limit = 80L) {
 
         # Only wrap if we actually split into multiple lines
         if (length(new_lines) < 2) { next }
-
-        # If paren alignment pushed continuation lines over the limit,
-        # fall back to depth-based indent
-        if (wrap == "paren" && any(nchar(new_lines) > line_limit)) {
-            cont_indent <- paste0(base_indent, "    ")
-            new_lines <- character(0)
-            current_line <- paste0(prefix, func_name, "(")
-            for (j in seq_along(args)) {
-                if (j < length(args)) {
-                    arg_text <- paste0(args[[j]], ", ")
-                } else {
-                    arg_text <- paste0(args[[j]], ")", suffix)
-                }
-                test_line <- paste0(current_line, arg_text)
-                if (nchar(test_line) > line_limit &&
-                    nchar(current_line) > nchar(cont_indent)) {
-                    new_lines <- c(new_lines, sub(" $", "", current_line))
-                    current_line <- paste0(cont_indent, arg_text)
-                } else {
-                    current_line <- test_line
-                }
-            }
-            new_lines <- c(new_lines, sub(" $", "", current_line))
-            if (length(new_lines) < 2) { next }
-        }
 
         # Replace the line
         if (call_line > 1) {
