@@ -50,10 +50,10 @@ collapse_one_call <- function (code) {
         return(NULL)
     }
 
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
     terminals <- pd[pd$terminal,]
     terminals <- terminals[order(terminals$line1, terminals$col1),]
-
-    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    terminals <- restore_truncated_str_const_tokens(terminals, lines)
 
     # Find multi-line parenthesized groups:
     # 1. Function calls: SYMBOL_FUNCTION_CALL followed by '('
@@ -157,4 +157,3 @@ collapse_one_call <- function (code) {
 
     NULL
 }
-

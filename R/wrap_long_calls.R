@@ -47,10 +47,10 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         return(NULL)
     }
 
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
     terminals <- pd[pd$terminal,]
     terminals <- terminals[order(terminals$line1, terminals$col1),]
-
-    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    terminals <- restore_truncated_str_const_tokens(terminals, lines)
 
     # Find function calls on lines that exceed the limit
     call_indices <- which(terminals$token == "SYMBOL_FUNCTION_CALL")
@@ -451,4 +451,3 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
 
     NULL
 }
-
