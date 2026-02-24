@@ -36,7 +36,7 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
 reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                                    line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)

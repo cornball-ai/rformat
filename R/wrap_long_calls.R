@@ -43,7 +43,7 @@ wrap_long_calls <- function (code, wrap = "paren", indent = 4L,
 wrap_one_long_call <- function (code, wrap = "paren", indent = 4L,
                                 line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)
@@ -352,7 +352,7 @@ wrap_long_operators <- function (code, indent = 4L, line_limit = 80L) {
 #' @keywords internal
 wrap_one_long_operator <- function (code, indent = 4L, line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)

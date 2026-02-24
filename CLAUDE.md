@@ -31,8 +31,7 @@ This project formats R code following R Core style conventions, based on analysi
 ## Spacing
 
 - Spaces around operators
-- Space after `function`: `function (x)`
-- No space before `(` in function calls: `foo(x)`
+- No space before `(` in `function(x)` or calls `foo(x)`
 - Space after commas
 - Space after control flow keywords: `if (`, `for (`
 
@@ -52,26 +51,26 @@ if (x > 0) {
 
 ## Functions
 
-- Space between `function` and `(`
+- No space between `function` and `(` (default; `function_space = TRUE` for space)
 - Short signatures stay on one line
 - Long signatures wrap with continuation indent (default: align to paren)
 - Default brace style is K&R (opening brace on same line); `brace_style = "allman"` for brace on its own line
 
 ```r
 # Short signature
-lapply <- function (X, FUN, ...) {
+lapply <- function(X, FUN, ...) {
     body
 }
 
 # Long signature (default: paren alignment)
-lm <- function (formula, data, subset, weights, na.action, method = "qr",
+lm <- function(formula, data, subset, weights, na.action, method = "qr",
                 model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
                 singular.ok = TRUE, contrasts = NULL, offset, ...) {
     body
 }
 
 # Long signature (wrap = "fixed": 8-space indent)
-lm <- function (formula, data, subset, weights, na.action,
+lm <- function(formula, data, subset, weights, na.action,
         method = "qr", model = TRUE, x = FALSE, y = FALSE,
         qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...) {
     body

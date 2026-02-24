@@ -43,7 +43,7 @@ add_control_braces <- function (code) {
 #' @keywords internal
 add_one_control_brace <- function (code) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)

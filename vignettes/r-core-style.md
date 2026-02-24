@@ -145,17 +145,12 @@ This codifies the majority practice. The tab-indented code is historical.
 
 ## rformat defaults
 
-rformat adopts the conventions where R Core is consistent (4-space indent,
-paren-aligned continuation, arguments on same line) and makes opinionated
-choices where R Core is mixed or at odds with modern practice:
+rformat adopts the conventions where R Core is consistent and makes opinionated
+choices where R Core is mixed:
 
-| Convention | R Core source | rformat default | Option to match R Core |
-|------------|---------------|-----------------|----------------------|
+| Convention | R Core source | rformat default | Option to change |
+|------------|---------------|-----------------|------------------|
 | Brace style | ~53% K&R, ~47% Allman | K&R | `brace_style = "allman"` |
-| `function` spacing | 96% no space | space | — |
+| `function` spacing | 96% no space | no space | `function_space = TRUE` |
 | Indentation | 89% spaces, 11% tabs | 4 spaces | `indent = "\t"` |
 | Continuation | 80% paren-aligned | paren-aligned | `wrap = "fixed"` |
-
-The `function (` spacing follows the convention established by R's own
-`deparse()` output and widely adopted by R style guides, even though the
-source files themselves mostly omit the space.

@@ -25,7 +25,7 @@ reformat_inline_if <- function (code, line_limit = 0L) {
 #' @keywords internal
 reformat_one_inline_if <- function (code, line_limit = 0L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)

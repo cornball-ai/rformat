@@ -159,7 +159,7 @@ expect_true(
 
 # Collapse short calls with inline function definitions
 code <- "lapply(x,\n  function(i) i + 1\n)"
-expect_equal(rformat(code), "lapply(x, function (i) i + 1)\n")
+expect_equal(rformat(code), "lapply(x, function(i) i + 1)\n")
 
 # Wrap long function calls at commas with paren-aligned continuation
 expect_equal(
@@ -479,10 +479,16 @@ r1 <- rformat(code)
 r2 <- rformat(r1)
 expect_equal(r1, r2, info = "Brace addition + operator wrap should be idempotent")
 
-# Anonymous function gets space: function (x)
+# Default: no space before ( in function definitions
 expect_true(
-  grepl("function \\(x\\)", rformat("sapply(xs, function(x) x + 1)")),
-  info = "Anonymous functions should get space before ("
+  grepl("function\\(x\\)", rformat("sapply(xs, function(x) x + 1)")),
+  info = "Default: no space before ( in function definitions"
+)
+
+# function_space = TRUE: space before ( in function definitions
+expect_true(
+  grepl("function \\(x\\)", rformat("sapply(xs, function(x) x + 1)", function_space = TRUE)),
+  info = "function_space = TRUE adds space before ("
 )
 
 # --- Bug A: Long string truncation ---

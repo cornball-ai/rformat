@@ -1,3 +1,7 @@
+# Package-level format options (avoids threading through 15+ call sites)
+.fmt_opts <- new.env(parent = emptyenv())
+.fmt_opts$function_space <- FALSE
+
 #' Format R Code Using Token-Based Parsing
 #'
 #' Internal function to format R code using getParseData tokens.
@@ -11,15 +15,17 @@
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
 #' @param line_limit Maximum line length before wrapping (default 80).
+#' @param function_space If TRUE, add space before `(` in function definitions.
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
 format_tokens <- function (code, indent = 4L, wrap = "paren",
                            expand_if = FALSE, brace_style = "kr",
-                           line_limit = 80L) {
+                           line_limit = 80L, function_space = FALSE) {
+    .fmt_opts$function_space <- function_space
     # Parse with source tracking
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         warning("Could not parse code, returning unchanged")
@@ -234,7 +240,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     for (i in seq_along(chunks)) {
         if (chunks[[i]]$is_expr) {
             parts[i] <- format_pipeline(chunks[[i]]$text, indent, wrap,
-                                        expand_if, brace_style, line_limit)
+                                        expand_if, brace_style, line_limit,
+                                        function_space)
         } else {
             parts[i] <- chunks[[i]]$text
         }
@@ -618,7 +625,7 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     if (t == "'('" && p == "FUNCTION") {
-        return(TRUE)
+        return(.fmt_opts$function_space)
     }
 
     if (t == "'{'") {
@@ -786,7 +793,7 @@ extract_expr_text <- function (lines, tokens, target_indent) {
 #' @keywords internal
 split_toplevel <- function (code) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(list(list(text = code, is_expr = FALSE)))
@@ -851,10 +858,11 @@ split_toplevel <- function (code) {
 #' @param expand_if Expand inline if-else.
 #' @param brace_style Brace placement style.
 #' @param line_limit Maximum line length.
+#' @param function_space If TRUE, add space before `(` in function definitions.
 #' @return Formatted code string.
 #' @keywords internal
 format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
-                             line_limit) {
+                             line_limit, function_space = FALSE) {
     # Collapse multi-line calls that fit on one line
     code <- apply_if_parseable(code, collapse_calls)
 
@@ -932,7 +940,7 @@ format_blank_lines <- function (code) {
 #' @keywords internal
 is_parseable_code <- function (code) {
     !is.null(tryCatch(parse(text = code, keep.source = TRUE),
-                      error = function (e) NULL))
+                      error = function(e) NULL))
 }
 
 #' Apply Transform Only If Output Parses
@@ -943,7 +951,7 @@ is_parseable_code <- function (code) {
 #' @return Transformed code if parseable, otherwise original code.
 #' @keywords internal
 apply_if_parseable <- function (code, fn, ...) {
-    updated <- tryCatch(fn(code, ...), error = function (e) code)
+    updated <- tryCatch(fn(code, ...), error = function(e) code)
 
     if (!is.character(updated) || length(updated) != 1L) {
         return(code)

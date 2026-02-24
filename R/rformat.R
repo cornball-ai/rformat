@@ -11,6 +11,9 @@
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
 #' @param line_limit Maximum line length before wrapping (default 80).
+#' @param function_space If TRUE, add space before `(` in function definitions:
+#'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
+#'   R Core source code.
 #' @return Formatted code as a character string.
 #' @export
 #' @examples
@@ -21,7 +24,8 @@
 #' # Allman brace style (legacy)
 #' rformat("f <- function(x) { x }", brace_style = "allman")
 rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
-                     brace_style = "kr", line_limit = 80L) {
+                     brace_style = "kr", line_limit = 80L,
+                     function_space = FALSE) {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
@@ -29,7 +33,7 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
     # Only normalize `} else` when needed for parsing. Applying this
     # unconditionally can destabilize already-valid nested if/else layouts.
     parsed_ok <- !is.null(tryCatch(parse(text = code, keep.source = TRUE),
-                                   error = function (e) NULL))
+                                   error = function(e) NULL))
     if (!parsed_ok) {
         code <- fix_else_placement(code)
     }
@@ -37,7 +41,8 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
     formatted <- format_tokens(code, indent = indent, wrap = wrap,
                                expand_if = expand_if,
                                brace_style = brace_style,
-                               line_limit = line_limit)
+                               line_limit = line_limit,
+                               function_space = function_space)
 
     format_blank_lines(formatted)
 }
@@ -57,6 +62,9 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
 #' @param line_limit Maximum line length before wrapping (default 80).
+#' @param function_space If TRUE, add space before `(` in function definitions:
+#'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
+#'   R Core source code.
 #' @return Invisibly returns formatted code.
 #' @export
 #' @examples
@@ -71,7 +79,8 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' unlink(f)
 rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
                           wrap = "paren", expand_if = FALSE,
-                          brace_style = "kr", line_limit = 80L) {
+                          brace_style = "kr", line_limit = 80L,
+                          function_space = FALSE) {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
@@ -79,7 +88,8 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
     code <- paste(readLines(path, warn = FALSE), collapse = "\n")
     formatted <- rformat(code, indent = indent, wrap = wrap,
                          expand_if = expand_if, brace_style = brace_style,
-                         line_limit = line_limit)
+                         line_limit = line_limit,
+                         function_space = function_space)
 
     if (!dry_run) {
         if (is.null(output)) {
@@ -108,6 +118,9 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
 #' @param line_limit Maximum line length before wrapping (default 80).
+#' @param function_space If TRUE, add space before `(` in function definitions:
+#'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
+#'   R Core source code.
 #' @return Invisibly returns vector of modified file paths.
 #' @export
 #' @examples
@@ -122,7 +135,8 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' unlink(d, recursive = TRUE)
 rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
                          indent = 4L, wrap = "paren", expand_if = FALSE,
-                         brace_style = "kr", line_limit = 80L) {
+                         brace_style = "kr", line_limit = 80L,
+                         function_space = FALSE) {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
     }
@@ -136,7 +150,8 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
         original <- paste(readLines(f, warn = FALSE), collapse = "\n")
         formatted <- rformat(original, indent = indent, wrap = wrap,
                              expand_if = expand_if, brace_style = brace_style,
-                             line_limit = line_limit)
+                             line_limit = line_limit,
+                             function_space = function_space)
 
         if (formatted != original) {
             modified <- c(modified, f)

@@ -44,17 +44,19 @@ rformat(code, brace_style = "allman")
 
 # Expand inline if-else to multi-line
 rformat(code, expand_if = TRUE)
+
+# Space after function keyword: function (x) instead of function(x)
+rformat(code, function_space = TRUE)
 ```
 
 ## Style
 
-Based on analysis of all 22 packages that ship with R (see `vignette("r-core-style")`). Where R Core is consistent — 4-space indentation, paren-aligned continuation, arguments on same line — rformat follows. Where R Core is mixed or at odds with modern practice, rformat makes opinionated choices: K&R braces (source is 53/47 K&R vs Allman), `function (` with a space (source is 96% no space, but `deparse()` and style guides use the space), and spaces over tabs (source is 89/11).
+Based on analysis of all 22 packages that ship with R (see `vignette("r-core-style")`). Where R Core is consistent, rformat follows: 4-space indentation, `function(` without a space (96% of source), paren-aligned continuation, arguments on same line. Where R Core is mixed, rformat makes opinionated choices: K&R braces (source is 53/47 K&R vs Allman) and spaces over tabs (source is 89/11).
 
 ### Spacing
 
 - Spaces around binary operators: `x <- 1 + 2`
-- Space after `function`: `function (x, y)`
-- No space before `(` in calls: `foo(x)` not `foo (x)`
+- No space before `(` in `function(x, y)` or calls `foo(x)`
 - Space after commas: `c(1, 2, 3)`
 - Space after control flow: `if (`, `for (`, `while (`
 
@@ -64,20 +66,20 @@ Short signatures stay on one line. Long signatures wrap with continuation indent
 
 ```r
 # Short
-lapply <- function (X, FUN, ...) {
+lapply <- function(X, FUN, ...) {
     FUN <- match.fun(FUN)
     ...
 }
 
 # Long (default: paren alignment)
-lm <- function (formula, data, subset, weights, na.action, method = "qr",
+lm <- function(formula, data, subset, weights, na.action, method = "qr",
                 model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
                 singular.ok = TRUE, contrasts = NULL, offset, ...) {
     ...
 }
 
 # Long (wrap = "fixed": 8-space indent)
-lm <- function (formula, data, subset, weights, na.action,
+lm <- function(formula, data, subset, weights, na.action,
         method = "qr", model = TRUE, x = FALSE, y = FALSE,
         qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...) {
     ...

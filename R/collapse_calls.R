@@ -39,7 +39,7 @@ collapse_calls <- function (code) {
 #' @keywords internal
 collapse_one_call <- function (code) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)

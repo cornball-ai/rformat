@@ -37,7 +37,7 @@ expand_call_if_args <- function (code, line_limit = 80L) {
 #' @keywords internal
 expand_one_call_if_arg <- function (code, line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
-                       error = function (e) NULL)
+                       error = function(e) NULL)
 
     if (is.null(parsed)) {
         return(NULL)
