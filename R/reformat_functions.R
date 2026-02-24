@@ -3,7 +3,7 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
     # Process one function at a time, re-parsing each time
     # to handle line number changes
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 200L, mode = "funcdef")
+    max_iterations <- 200L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -115,7 +115,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
         if (func_tok$col1 > 1) {
             prefix <- substring(func_line_content, 1,
                                 col_to_charpos(func_line_content,
-                                    func_tok$col1 - 1))
+                    func_tok$col1 - 1))
         } else {
             prefix <- ""
         }
@@ -297,7 +297,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
             # Preserve body content after { on the same line
             brace_rest <- substring(lines[brace_tok$line1],
                                     col_to_charpos(lines[brace_tok$line1],
-                                        brace_tok$col2) + 1)
+                    brace_tok$col2) + 1)
             if (nzchar(trimws(brace_rest))) {
                 new_lines[length(new_lines)] <- paste0(
                     new_lines[length(new_lines)], brace_rest)

@@ -13,7 +13,7 @@
 #' @keywords internal
 collapse_calls <- function (code) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 100L, mode = "collapse")
+    max_iterations <- 100L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1

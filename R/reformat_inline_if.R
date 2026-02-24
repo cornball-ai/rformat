@@ -1,6 +1,6 @@
 reformat_inline_if <- function (code, line_limit = 0L) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 100L, mode = "inline_if")
+    max_iterations <- 100L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
