@@ -9,117 +9,92 @@ title: "R Core Style Analysis"
 
 # R Core Style Analysis
 
-This vignette documents the analysis of actual R Core source code that informed
-the formatting choices in rformat.
+This vignette documents the analysis of actual R source code that informed
+the formatting choices in rformat. We analyzed every `.R` file from the 22
+packages that ship with R: 14 base packages and 8 recommended packages.
 
-## Background
+## Method
 
-When implementing a code formatter, a key question is: what style should we
-target? For R, the natural reference is the R Core source code itself.
+We downloaded the R 4.5.2 source tarball and extracted the R/ directories
+from all base packages. For recommended packages (codetools, lattice, MASS,
+Matrix, mgcv, nlme, nnet, survival) we used the CRAN source tarballs. We
+parsed each file with `getParseData()` and tallied formatting conventions
+across all function definitions.
 
-However, there's a catch: examining functions via `deparse()` in the console
-shows *reconstructed* formatting, not the original source. To understand the
-actual R Core style, we need to examine the source files directly.
+An earlier version of this analysis used `deparse()` output from 5 packages.
+That approach shows *reconstructed* formatting, not the original source. The
+numbers below come from the actual source files.
 
-## Analysis of Base R Functions
+## Results: Base R (14 packages)
 
-First, let's analyze the formatting patterns across exported functions in base R
-packages using `deparse()` output:
+612 files, 172,810 lines, 8,426 function definitions.
 
-```{r}
-get_pkg_functions <- function(pkg)
-{
-    ns <- getNamespace(pkg)
-    exports <- getNamespaceExports(pkg)
-    funs <- Filter(function(nm) is.function(get(nm, envir = ns)), exports)
-    lapply(setNames(funs, funs), function(nm) get(nm, envir = ns))
-}
+### Brace style
 
-analyze_signature <- function(fn, name)
-{
-    txt <- deparse(fn)
-    func_line_idx <- grep("^function\\s*\\(", txt)
-    if (length(func_line_idx) == 0) return(NULL)
-    func_line_idx <- func_line_idx[1]
+| Style | Count | % |
+|-------|------:|--:|
+| K&R (same line) | 2,985 | 52.9 |
+| Allman (own line) | 2,655 | 47.1 |
+| No braces (one-liner) | 2,786 | — |
 
-    brace_idx <- grep("^\\{", txt)
-    if (length(brace_idx) == 0) {
-        brace_idx <- func_line_idx
-    } else {
-        brace_idx <- brace_idx[1]
-    }
+Base R is genuinely mixed. Neither style dominates.
 
-    sig_lines <- brace_idx - func_line_idx
-    if (sig_lines == 0 && grepl("\\{\\s*$", txt[func_line_idx])) {
-        sig_lines <- 1
-    }
+### Indentation
 
-    formals_list <- formals(fn)
-    n_args <- length(formals_list)
-    first_line_len <- nchar(txt[func_line_idx])
+| Style | Lines | % |
+|-------|------:|--:|
+| Space-indented | 116,187 | 89.0 |
+| Tab-indented | 14,328 | 11.0 |
 
-    if (sig_lines <= 1) {
-        style <- "single_line"
-    } else {
-        style <- "continuation"
-    }
+Most common space indents: 4 (40,412), 8 (24,324), 12 (14,257), 16 (7,054).
+The 4-space pattern is dominant.
 
-    list(
-        name = name,
-        n_args = n_args,
-        sig_lines = sig_lines,
-        first_line_len = first_line_len,
-        style = style
-    )
-}
-```
+### Space after `function`
 
-Now analyze functions from core packages:
+| Style | Count | % |
+|-------|------:|--:|
+| `function(` | 8,076 | 95.8 |
+| `function (` | 350 | 4.2 |
 
-```{r}
-pkgs <- c("base", "stats", "utils", "graphics", "grDevices")
-all_results <- list()
+The no-space form is overwhelmingly dominant. The space form appears in a few
+well-known functions (`lm`, `lapply`, `glm`) but is the exception, not the rule.
 
-for (pkg in pkgs) {
-    funs <- get_pkg_functions(pkg)
-    results <- lapply(names(funs), function(nm) {
-        tryCatch(analyze_signature(funs[[nm]], nm), error = function(e) NULL)
-    })
-    all_results <- c(all_results, Filter(Negate(is.null), results))
-}
+### Function signatures
 
-df <- do.call(rbind, lapply(all_results, function(x) {
-    data.frame(
-        name = x$name,
-        n_args = x$n_args,
-        style = x$style,
-        stringsAsFactors = FALSE
-    )
-}))
+| Style | Count | % |
+|-------|------:|--:|
+| Single-line | 7,553 | 89.6 |
+| Multi-line | 873 | 10.4 |
 
-cat("Total functions analyzed:", nrow(df), "\n\n")
+Of the 873 multi-line signatures:
 
-cat("Style distribution:\n")
-print(table(df$style))
-cat("\nPercentages:\n")
-print(round(prop.table(table(df$style)) * 100, 1))
-```
+| Continuation style | Count |
+|--------------------|------:|
+| Paren-aligned | 699 |
+| Tab-indented | 144 |
+| Other | 30 |
 
-Style by number of arguments:
+Paren alignment is the clear convention for multi-line signatures (80%).
 
-```{r}
-df$arg_group <- cut(df$n_args,
-    breaks = c(-1, 0, 1, 2, 3, 5, 10, Inf),
-    labels = c("0", "1", "2", "3", "4-5", "6-10", "11+"))
-print(table(df$arg_group, df$style))
-```
+## Results: Base + Recommended (22 packages)
 
-## Actual Source Code Analysis
+920 files, 263,807 lines, 12,306 function definitions.
 
-The `deparse()` output differs from the actual source. Let's examine the real
-R source files from the R repository.
+Adding the 8 recommended packages barely shifts the percentages:
 
-Example from `lm.R` (fetched from r-source repository):
+| Metric | Base 14 | All 22 |
+|--------|--------:|-------:|
+| K&R braces | 52.9% | 53.6% |
+| Allman braces | 47.1% | 46.4% |
+| `function(` | 95.8% | 96.5% |
+| Space-indented | 89.0% | 89.9% |
+| Paren-aligned cont. | 80.1% | 78.6% |
+
+The recommended packages follow the same conventions as base.
+
+## Source examples
+
+Example from `stats/lm.R` — one of the minority that uses `function (`:
 
 ```
 lm <- function (formula, data, subset, weights, na.action,
@@ -129,14 +104,6 @@ lm <- function (formula, data, subset, weights, na.action,
 {
     ret.x <- x
     ret.y <- y
-```
-
-Example from `lapply.R`:
-
-```
-lapply <- function (X, FUN, ...)
-{
-    FUN <- match.fun(FUN)
 ```
 
 Using `cat -A` to reveal tabs (`^I`) vs spaces:
@@ -150,41 +117,22 @@ lm <- function (formula, data, subset, weights, na.action,$
     ret.x <- x$
 ```
 
-## Key Findings
+## Key findings
 
-**The R Core style is consistent, with one minor variation:**
+1. **Brace style is mixed** — roughly 53/47 K&R vs Allman. Neither is "the"
+   R Core style. Individual packages are often internally consistent, but
+   there is no project-wide convention.
+2. **`function(` without space** is the norm (96%). The `function (` form
+   that appears in textbooks and style guides is actually rare in the source.
+3. **4-space indentation** is dominant (89% space-indented, 4 being the most
+   common width), with 11% tab-indented lines.
+4. **Paren-aligned continuation** is the clear choice for multi-line
+   signatures (80%).
+5. **Arguments start on the same line** as `function(` — R Core never puts
+   the first argument on a new line.
+6. **Closing `)` on same line as last argument** — no dangling paren style.
 
-### Consistent Rules
-
-1. Space between `function` and `(` -- i.e. `function (` not `function(`
-2. Arguments start on same line as `function (`
-3. If args don't fit, continuation lines align (using tabs)
-4. Closing `)` on same line as last argument
-5. `{` always on its own line, aligned with start of statement
-6. Never puts first arg on a new line (no "super vertical" style)
-
-### One Variation
-
-Body indentation uses either **4 spaces** OR **2 tabs** (display equivalently
-with default tab width of 8, showing as 16 characters, but commonly rendered
-as 8 with tab width 4). This is mixed even within the same file, likely due to
-historical editor differences rather than intentional style variation.
-
-## Style Statistics
-
-| Args   | Single Line | Continuation |
-|--------|-------------|--------------|
-| 0      | 63          | 0            |
-| 1      | 354         | 0            |
-| 2      | 590         | 4            |
-| 3      | 326         | 14           |
-| 4-5    | 286         | 94           |
-| 6-10   | 46          | 191          |
-| 11+    | 1           | 81           |
-
-**Summary:** 81% single-line, 19% continuation, 100% brace on own line.
-
-## R Developer Guide Recommendation
+## R Developer Guide recommendation
 
 The [R Dev Guide PR #256](https://github.com/r-devel/rdevguide/pull/256)
 recommends these EditorConfig settings:
@@ -193,33 +141,21 @@ recommends these EditorConfig settings:
 - **Tab width:** 8 (for display)
 - **Use spaces, not tabs**
 
-This means the modern convention is 4 spaces, while the vintage R Core source
-files used tabs (which displayed as 8 characters).
+This codifies the majority practice. The tab-indented code is historical.
 
-## rformat Implementation
+## rformat defaults
 
-Based on this analysis, rformat provides flexible options:
+rformat adopts the conventions where R Core is consistent (4-space indent,
+paren-aligned continuation, arguments on same line) and makes opinionated
+choices where R Core is mixed or at odds with modern practice:
 
-- **Default (4 spaces):** Modern style, matches R Dev Guide recommendation
-- **Tabs:** For those who prefer tab characters
+| Convention | R Core source | rformat default | Option to match R Core |
+|------------|---------------|-----------------|----------------------|
+| Brace style | ~53% K&R, ~47% Allman | K&R | `brace_style = "allman"` |
+| `function` spacing | 96% no space | space | — |
+| Indentation | 89% spaces, 11% tabs | 4 spaces | `indent = "\t"` |
+| Continuation | 80% paren-aligned | paren-aligned | `wrap = "fixed"` |
 
-```{r eval=FALSE}
-# Modern style (default) - 4 spaces, paren alignment
-rformat("f <- function(x, y) { x + y }")
-
-# Single tab per indent level
-rformat("f <- function(x, y) { x + y }", indent = "\t")
-
-# 2 spaces
-rformat("f <- function(x, y) { x + y }", indent = 2L)
-
-# Fixed 8-space continuation (instead of paren alignment)
-rformat("f <- function(x, y) { x + y }", wrap = "fixed")
-```
-
-rformat uses R Core continuation style for function signatures:
-
-- **Short signatures** stay on one line: `function (x, y)`
-- **Long signatures** wrap with continuation indent (default: align to paren,
-  or 8-space fixed with `wrap = "fixed"`)
-- **Opening brace** `{` on same line by default (K&R); use `brace_style = "allman"` for R Core's own-line style
+The `function (` spacing follows the convention established by R's own
+`deparse()` output and widely adopted by R style guides, even though the
+source files themselves mostly omit the space.

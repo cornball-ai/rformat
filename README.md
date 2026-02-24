@@ -48,7 +48,7 @@ rformat(code, expand_if = TRUE)
 
 ## Style
 
-Based on analysis of actual R Core source code (see `vignette("r-core-style")`). Defaults follow R Core conventions (4-space indentation, paren-aligned continuation, space after `function`) with two deliberate departures: K&R brace style instead of Allman (`brace_style = "allman"` to restore it), and spaces instead of tabs (`indent = "\t"` to restore them).
+Based on analysis of all 22 packages that ship with R (see `vignette("r-core-style")`). Where R Core is consistent — 4-space indentation, paren-aligned continuation, arguments on same line — rformat follows. Where R Core is mixed or at odds with modern practice, rformat makes opinionated choices: K&R braces (source is 53/47 K&R vs Allman), `function (` with a space (source is 96% no space, but `deparse()` and style guides use the space), and spaces over tabs (source is 89/11).
 
 ### Spacing
 
