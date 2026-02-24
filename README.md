@@ -1,6 +1,6 @@
 # rformat
 
-Token-based R code formatter following R Core style conventions.
+Token-based dependency-free R code formatter following R Core style conventions.
 
 ## Installation
 
@@ -39,13 +39,16 @@ rformat(code, indent = "\t")
 # Fixed 8-space continuation (instead of paren alignment)
 rformat(code, wrap = "fixed")
 
+# Allman brace style (opening brace on its own line)
+rformat(code, brace_style = "allman")
+
 # Expand inline if-else to multi-line
 rformat(code, expand_if = TRUE)
 ```
 
 ## Style
 
-Based on analysis of actual R Core source code (see `vignette("r-core-style")`).
+Based on analysis of actual R Core source code (see `vignette("r-core-style")`). Defaults follow R Core conventions (4-space indentation, paren-aligned continuation, space after `function`) with two deliberate departures: K&R brace style instead of Allman (`brace_style = "allman"` to restore it), and spaces instead of tabs (`indent = "\t"` to restore them).
 
 ### Spacing
 
@@ -57,12 +60,11 @@ Based on analysis of actual R Core source code (see `vignette("r-core-style")`).
 
 ### Function Definitions
 
-Short signatures stay on one line. Long signatures wrap with continuation indent. Opening brace on its own line.
+Short signatures stay on one line. Long signatures wrap with continuation indent. Default brace style is K&R (opening brace on same line); use `brace_style = "allman"` for brace on its own line.
 
 ```r
 # Short
-lapply <- function (X, FUN, ...)
-{
+lapply <- function (X, FUN, ...) {
     FUN <- match.fun(FUN)
     ...
 }
@@ -70,16 +72,14 @@ lapply <- function (X, FUN, ...)
 # Long (default: paren alignment)
 lm <- function (formula, data, subset, weights, na.action, method = "qr",
                 model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
-                singular.ok = TRUE, contrasts = NULL, offset, ...)
-{
+                singular.ok = TRUE, contrasts = NULL, offset, ...) {
     ...
 }
 
 # Long (wrap = "fixed": 8-space indent)
 lm <- function (formula, data, subset, weights, na.action,
         method = "qr", model = TRUE, x = FALSE, y = FALSE,
-        qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...)
-{
+        qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...) {
     ...
 }
 ```
@@ -116,12 +116,12 @@ Structural rewrites (collapsing calls, adding braces, wrapping long lines, refor
 
 - Every transform pass is wrapped in a **parse gate** — if the result doesn't parse, the original is kept.
 - Complex one-liner bodies (containing nested control flow or function literals) are left alone rather than risk mis-association.
-- Large files (>250 lines) get reduced iteration budgets for expensive rewrite loops; very large files (>1500 lines) skip structural rewrites entirely and receive only base token formatting.
+- Code is split into top-level expressions and each is formatted independently, so large files get the same treatment as small ones.
 - Anonymous function literals inside calls are not reformatted — only named function definitions get signature/brace normalization.
 
 ### Stress Testing
 
-The test suite (`lab/check_stress_pkgs.R`) formats every `.R` file from 100 CRAN source tarballs, checking:
+The [stress test suite](https://github.com/cornball-ai/rformat-lab) formats every `.R` file from 100 CRAN source tarballs, checking:
 
 - **Parse gate**: formatted code must parse without errors
 - **Idempotency**: formatting twice produces identical output

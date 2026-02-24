@@ -222,4 +222,4 @@ rformat uses R Core continuation style for function signatures:
 - **Short signatures** stay on one line: `function (x, y)`
 - **Long signatures** wrap with continuation indent (default: align to paren,
   or 8-space fixed with `wrap = "fixed"`)
-- **Opening brace** `{` always on its own line
+- **Opening brace** `{` on same line by default (K&R); use `brace_style = "allman"` for R Core's own-line style

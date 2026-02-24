@@ -3,10 +3,12 @@
 \alias{wrap_one_long_operator}
 \title{Wrap One Long Line at an Operator}
 \usage{
-wrap_one_long_operator(code, line_limit = 80L)
+wrap_one_long_operator(code, indent = 4L, line_limit = 80L)
 }
 \arguments{
 \item{code}{Code string.}
+
+\item{indent}{Indent size (integer) or string.}
 
 \item{line_limit}{Maximum line length (default 80).}
 }

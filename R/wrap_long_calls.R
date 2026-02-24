@@ -4,6 +4,8 @@
 #' Continuation lines are aligned to the opening parenthesis.
 #'
 #' @param code Formatted code string.
+#' @param wrap Continuation style: `"paren"` or `"fixed"`.
+#' @param indent Indent size (integer) or string.
 #' @param line_limit Maximum line length (default 80).
 #' @return Code with wrapped long calls.
 #' @keywords internal
@@ -33,6 +35,8 @@ wrap_long_calls <- function (code, wrap = "paren", indent = 4L,
 #' and wraps it at commas with paren-aligned continuation.
 #'
 #' @param code Code string.
+#' @param wrap Continuation style: `"paren"` or `"fixed"`.
+#' @param indent Indent size (integer) or string.
 #' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
@@ -312,6 +316,7 @@ wrap_one_long_call <- function (code, wrap = "paren", indent = 4L,
 #' with continuation aligned to the first operand.
 #'
 #' @param code Formatted code string.
+#' @param indent Indent size (integer) or string.
 #' @param line_limit Maximum line length (default 80).
 #' @return Code with wrapped long lines.
 #' @keywords internal
@@ -341,6 +346,7 @@ wrap_long_operators <- function (code, indent = 4L, line_limit = 80L) {
 #' first line, continuation is aligned to the first operand.
 #'
 #' @param code Code string.
+#' @param indent Indent size (integer) or string.
 #' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal

@@ -427,11 +427,11 @@ compute_indent_at_col <- function (nesting, line_toks, line_num, break_col) {
 #' Format Tokens on a Single Line
 #'
 #' @param tokens Data frame of tokens for one line.
-#' @return Formatted line content (no leading whitespace).
-#' @keywords internal
 #' @param prev_token Optional token to treat as the previous token when
 #'   formatting a token subset (e.g., suffix after a collapsed call).
 #' @param prev_prev_token Optional token before prev_token for unary detection.
+#' @return Formatted line content (no leading whitespace).
+#' @keywords internal
 format_line_tokens <- function (tokens, prev_token = NULL,
                                 prev_prev_token = NULL) {
     if (nrow(tokens) == 0) {

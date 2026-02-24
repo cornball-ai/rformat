@@ -55,28 +55,25 @@ if (x > 0) {
 - Space between `function` and `(`
 - Short signatures stay on one line
 - Long signatures wrap with continuation indent (default: align to paren)
-- Opening brace `{` always on its own line
+- Default brace style is K&R (opening brace on same line); `brace_style = "allman"` for brace on its own line
 
 ```r
 # Short signature
-lapply <- function (X, FUN, ...)
-{
+lapply <- function (X, FUN, ...) {
     body
 }
 
 # Long signature (default: paren alignment)
 lm <- function (formula, data, subset, weights, na.action, method = "qr",
                 model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
-                singular.ok = TRUE, contrasts = NULL, offset, ...)
-{
+                singular.ok = TRUE, contrasts = NULL, offset, ...) {
     body
 }
 
 # Long signature (wrap = "fixed": 8-space indent)
 lm <- function (formula, data, subset, weights, na.action,
         method = "qr", model = TRUE, x = FALSE, y = FALSE,
-        qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...)
-{
+        qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...) {
     body
 }
 ```

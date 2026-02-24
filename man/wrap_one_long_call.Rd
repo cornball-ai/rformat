@@ -3,10 +3,14 @@
 \alias{wrap_one_long_call}
 \title{Wrap One Long Function Call}
 \usage{
-wrap_one_long_call(code, line_limit = 80L)
+wrap_one_long_call(code, wrap = "paren", indent = 4L, line_limit = 80L)
 }
 \arguments{
 \item{code}{Code string.}
+
+\item{wrap}{Continuation style: `"paren"` or `"fixed"`.}
+
+\item{indent}{Indent size (integer) or string.}
 
 \item{line_limit}{Maximum line length (default 80).}
 }
