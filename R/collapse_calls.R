@@ -13,7 +13,7 @@
 #' @keywords internal
 collapse_calls <- function (code) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 100L, mode = "collapse")
+    max_iterations <- 100L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -50,10 +50,10 @@ collapse_one_call <- function (code) {
         return(NULL)
     }
 
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
     terminals <- pd[pd$terminal,]
     terminals <- terminals[order(terminals$line1, terminals$col1),]
-
-    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    terminals <- restore_truncated_str_const_tokens(terminals, lines)
 
     # Find multi-line parenthesized groups:
     # 1. Function calls: SYMBOL_FUNCTION_CALL followed by '('
@@ -123,16 +123,10 @@ collapse_one_call <- function (code) {
                 prev_prev_tok <- call_tokens[nrow(call_tokens) - 1,]
             }
             suffix <- format_line_tokens(after_close,
-                                         prev_token = last_call_tok,
-                                         prev_prev_token = prev_prev_tok)
+                prev_token = last_call_tok, prev_prev_token = prev_prev_tok)
         }
 
         full_line <- paste0(full_line, suffix)
-
-        # Also check if there are tokens before the function call on func_line
-        # that aren't part of the prefix (i.e., code tokens before the call)
-        before_call <- terminals[terminals$line1 == func_line &
-            terminals$col1 < func_col,]
 
         # Replace the lines
         if (func_line > 1) {

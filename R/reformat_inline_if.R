@@ -1,6 +1,6 @@
 reformat_inline_if <- function (code, line_limit = 0L) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 100L, mode = "inline_if")
+    max_iterations <- 100L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -200,10 +200,13 @@ reformat_one_inline_if <- function (code, line_limit = 0L) {
             }
 
             # If we just closed the outermost paren/brace, include this
-            # token and stop — but not inside an if-else (condition parens)
+            # token and stop — unless next token is [ or [[ (indexing the
+            # result, still part of the expression)
             if (prev_paren_depth > 0 && false_paren_depth == 0 &&
                 false_brace_depth == 0 && false_if_depth == 0) {
-                break
+                next_ok <- false_end + 1 <= nrow(terminals) &&
+                terminals$token[false_end + 1] %in% c("'['", "LBB")
+                if (!next_ok) { break }
             }
 
             # End at line break when not nested (for simple expressions)

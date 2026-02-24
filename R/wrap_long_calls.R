@@ -7,15 +7,17 @@
 #' @param line_limit Maximum line length (default 80).
 #' @return Code with wrapped long calls.
 #' @keywords internal
-wrap_long_calls <- function (code, line_limit = 80L) {
+wrap_long_calls <- function (code, wrap = "paren", indent = 4L,
+                             line_limit = 80L) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 100L, mode = "wrap")
+    max_iterations <- 100L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- wrap_one_long_call(code, line_limit = line_limit)
+        result <- wrap_one_long_call(code, wrap = wrap, indent = indent,
+                                     line_limit = line_limit)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -34,7 +36,8 @@ wrap_long_calls <- function (code, line_limit = 80L) {
 #' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-wrap_one_long_call <- function (code, line_limit = 80L) {
+wrap_one_long_call <- function (code, wrap = "paren", indent = 4L,
+                                line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
                        error = function (e) NULL)
 
@@ -47,10 +50,10 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         return(NULL)
     }
 
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
     terminals <- pd[pd$terminal,]
     terminals <- terminals[order(terminals$line1, terminals$col1),]
-
-    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    terminals <- restore_truncated_str_const_tokens(terminals, lines)
 
     # Find function calls on lines that exceed the limit
     call_indices <- which(terminals$token == "SYMBOL_FUNCTION_CALL")
@@ -168,6 +171,7 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         # Collect arguments as groups of tokens between commas at depth 1
         args <- list()
+        arg_first_tokens <- character(0)
         current_arg_tokens <- list()
         depth <- 0
 
@@ -185,6 +189,8 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
                     arg_df <- do.call(rbind,
                                       lapply(current_arg_tokens, as.data.frame))
                     args[[length(args) + 1]] <- format_line_tokens(arg_df)
+                    arg_first_tokens <- c(arg_first_tokens,
+                        current_arg_tokens[[1]]$token)
                 }
                 current_arg_tokens <- list()
             } else {
@@ -195,6 +201,8 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         if (length(current_arg_tokens) > 0) {
             arg_df <- do.call(rbind, lapply(current_arg_tokens, as.data.frame))
             args[[length(args) + 1]] <- format_line_tokens(arg_df)
+            arg_first_tokens <- c(arg_first_tokens,
+                                  current_arg_tokens[[1]]$token)
         }
 
         if (length(args) < 2) { next }
@@ -212,9 +220,6 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         func_name <- terminals$text[ci]
 
-        # Continuation indent: align to opening paren column
-        cont_indent <- strrep(" ", nchar(prefix) + nchar(func_name) + 1)
-
         # Get suffix (everything after closing paren on the same line)
         close_col <- terminals$col2[close_idx]
         char_pos_close <- col_to_charpos(line_content, close_col)
@@ -223,6 +228,26 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
         } else {
             suffix <- ""
         }
+
+        indent_size <- if (is.character(indent)) nchar(indent) else indent
+
+        # Compute depth-based indent using shared nesting model
+        nesting <- compute_nesting(terminals, length(lines))
+        cont_level <- compute_indent_at_col(nesting, line_toks, call_line,
+            terminals$col1[open_idx])
+        depth_cont_indent <- strrep(" ", cont_level * indent_size)
+
+        # Paren-aligned continuation (default): align to opening paren
+        paren_col <- nchar(prefix) + nchar(func_name) + 1
+        if (wrap == "paren" && paren_col <= line_limit %/% 2L) {
+            cont_indent <- strrep(" ", paren_col)
+        } else {
+            cont_indent <- depth_cont_indent
+        }
+
+        # Tokens that format_tokens excludes from paren-alignment
+        paren_excl <- c("')'", "']'", "']]'", "IF", "FOR", "WHILE", "REPEAT",
+                        "ELSE", "'}'")
 
         # Build wrapped lines
         new_lines <- character(0)
@@ -239,7 +264,14 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
             if (nchar(test_line) > line_limit &&
                 nchar(current_line) > nchar(cont_indent)) {
                 new_lines <- c(new_lines, sub(" $", "", current_line))
-                current_line <- paste0(cont_indent, arg_text)
+                # Use depth-based indent for args whose first token
+                # is excluded from paren-alignment by format_tokens
+                arg_indent <- if (arg_first_tokens[j] %in% paren_excl) {
+                    depth_cont_indent
+                } else {
+                    cont_indent
+                }
+                current_line <- paste0(arg_indent, arg_text)
             } else {
                 current_line <- test_line
             }
@@ -248,32 +280,6 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 
         # Only wrap if we actually split into multiple lines
         if (length(new_lines) < 2) { next }
-
-        # If paren alignment pushed continuation lines over the limit,
-        # fall back to depth-based indent (base_indent + one level)
-        if (any(nchar(new_lines) > line_limit)) {
-            base_indent <- sub("^(\\s*).*", "\\1", lines[call_line])
-            cont_indent <- paste0(base_indent, "    ")
-            new_lines <- character(0)
-            current_line <- paste0(prefix, func_name, "(")
-            for (j in seq_along(args)) {
-                if (j < length(args)) {
-                    arg_text <- paste0(args[[j]], ", ")
-                } else {
-                    arg_text <- paste0(args[[j]], ")", suffix)
-                }
-                test_line <- paste0(current_line, arg_text)
-                if (nchar(test_line) > line_limit &&
-                    nchar(current_line) > nchar(cont_indent)) {
-                    new_lines <- c(new_lines, sub(" $", "", current_line))
-                    current_line <- paste0(cont_indent, arg_text)
-                } else {
-                    current_line <- test_line
-                }
-            }
-            new_lines <- c(new_lines, sub(" $", "", current_line))
-            if (length(new_lines) < 2) { next }
-        }
 
         # Replace the line
         if (call_line > 1) {
@@ -299,6 +305,7 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
     # wrap_one_long_call: no changes
     NULL
 }
+
 #' Wrap Long Lines at Operators
 #'
 #' Wraps lines exceeding the line limit at logical operators (`||`, `&&`)
@@ -308,15 +315,16 @@ wrap_one_long_call <- function (code, line_limit = 80L) {
 #' @param line_limit Maximum line length (default 80).
 #' @return Code with wrapped long lines.
 #' @keywords internal
-wrap_long_operators <- function (code, line_limit = 80L) {
+wrap_long_operators <- function (code, indent = 4L, line_limit = 80L) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 100L, mode = "wrap")
+    max_iterations <- 100L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
         changed <- FALSE
 
-        result <- wrap_one_long_operator(code, line_limit = line_limit)
+        result <- wrap_one_long_operator(code, indent = indent,
+            line_limit = line_limit)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -336,7 +344,7 @@ wrap_long_operators <- function (code, line_limit = 80L) {
 #' @param line_limit Maximum line length (default 80).
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
-wrap_one_long_operator <- function (code, line_limit = 80L) {
+wrap_one_long_operator <- function (code, indent = 4L, line_limit = 80L) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
                        error = function (e) NULL)
 
@@ -403,28 +411,13 @@ wrap_one_long_operator <- function (code, line_limit = 80L) {
         first_part <- substring(lines[line_num], 1,
                                 col_to_charpos(lines[line_num], break_tok$col2))
 
-        # Continuation indent: depth-based to match format_tokens
-        # (base_indent already reflects brace/paren depth from format_tokens;
-        # add one indent level per unclosed bracket on this line before the break)
-        base_indent <- sub("^(\\s*).*", "\\1", lines[line_num])
+        # Continuation indent: depth-based using shared nesting model
+        indent_size <- if (is.character(indent)) nchar(indent) else indent
+        nesting <- compute_nesting(terminals, length(lines))
 
-        bracket_depth <- 0
-        for (j in seq_len(nrow(line_toks))) {
-            tok_j <- line_toks[j,]
-            if (tok_j$col1 > break_tok$col1) { break }
-            if (tok_j$token %in% c("'('", "'['")) {
-                bracket_depth <- bracket_depth + 1
-            } else if (tok_j$token == "LBB") {
-                bracket_depth <- bracket_depth + 2
-            } else if (tok_j$token %in% c("')'", "']'")) {
-                bracket_depth <- bracket_depth - 1
-            } else if (tok_j$token == "']]'") {
-                bracket_depth <- bracket_depth - 2
-            }
-        }
-
-        cont_indent <- paste0(base_indent,
-                              strrep("    ", max(0, bracket_depth)))
+        cont_level <- compute_indent_at_col(nesting, line_toks, line_num,
+            break_tok$col1)
+        cont_indent <- strrep(" ", cont_level * indent_size)
 
         # Second part: rest of line, trimmed
         rest <- substring(lines[line_num],

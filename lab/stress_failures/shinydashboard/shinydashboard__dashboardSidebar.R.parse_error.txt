@@ -1,4 +1,0 @@
-<text>:79:86: unexpected '['
-78:         # queries (like max-width: 767px) that work for narrower screens.
-79:         custom_css <- tags$head(tags$style(HTML(gsub("_WIDTH_", width, fixed = TRUE, [
-                                                                                         ^

@@ -1,3 +1,0 @@
-<text>:1:67: unexpected ')'
-1: mapasp <- function (data, xlim = bbox(data)[1, ylim = bbox(data)[2)
-                                                                      ^

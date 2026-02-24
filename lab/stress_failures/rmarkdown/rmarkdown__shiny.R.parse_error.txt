@@ -1,4 +1,0 @@
-<text>:300:92: unexpected '{'
-299:             if (!isTRUE(out$cacheable)) {
-300:                 shiny::onReactiveDomainEnded(shiny::getDefaultReactiveDomain(), function ( {
-                                                                                                ^

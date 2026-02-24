@@ -3,7 +3,7 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
     # Process one function at a time, re-parsing each time
     # to handle line number changes
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 200L, mode = "funcdef")
+    max_iterations <- 200L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -114,7 +114,8 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
         # func_tok$col1 is the 1-based column position of "function"
         if (func_tok$col1 > 1) {
             prefix <- substring(func_line_content, 1,
-                col_to_charpos(func_line_content, func_tok$col1 - 1))
+                                col_to_charpos(func_line_content,
+                    func_tok$col1 - 1))
         } else {
             prefix <- ""
         }
@@ -164,9 +165,9 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                     # Format value tokens properly
                     if (length(value_tokens) > 0) {
                         value_df <- do.call(rbind,
-                                            lapply(value_tokens, as.data.frame))
+                            lapply(value_tokens, as.data.frame))
                         formal_text <- paste0(formal_text,
-                                              format_line_tokens(value_df))
+                            format_line_tokens(value_df))
                     }
                 }
 
@@ -251,10 +252,9 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                     if (next_tok$line1 > btok$line1) {
                         # Line break at depth 0 — check for continuation
                         cont_tokens <- c("'+'", "'-'", "'*'", "'/'", "'^'",
-                                         "SPECIAL", "AND", "OR", "AND2", "OR2",
-                                         "GT", "LT", "GE", "LE", "EQ", "NE",
-                                         "LEFT_ASSIGN", "EQ_ASSIGN", "'~'",
-                                         "PIPE")
+                            "SPECIAL", "AND", "OR", "AND2", "OR2", "GT", "LT",
+                            "GE", "LE", "EQ", "NE", "LEFT_ASSIGN", "EQ_ASSIGN",
+                            "'~'", "PIPE")
                         if (!(next_tok$token %in% cont_tokens)) { break }
                     }
                 }
@@ -296,7 +296,8 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
             }
             # Preserve body content after { on the same line
             brace_rest <- substring(lines[brace_tok$line1],
-                col_to_charpos(lines[brace_tok$line1], brace_tok$col2) + 1)
+                                    col_to_charpos(lines[brace_tok$line1],
+                    brace_tok$col2) + 1)
             if (nzchar(trimws(brace_rest))) {
                 new_lines[length(new_lines)] <- paste0(
                     new_lines[length(new_lines)], brace_rest)
@@ -308,14 +309,13 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                 last_body_line <- terminals$line1[body_end_idx]
                 last_body_col <- terminals$col2[body_end_idx]
                 rest_of_line <- substring(lines[last_body_line],
-                                          last_body_col + 1)
+                    last_body_col + 1)
                 if (nzchar(rest_of_line)) {
                     body_suffix <- rest_of_line
                 }
             }
-            new_lines[length(new_lines)] <- paste0(new_lines[length(new_lines)],
-                                                   " ", inline_body,
-                                                   body_suffix)
+            new_lines[length(new_lines)] <- paste0(
+                new_lines[length(new_lines)], " ", inline_body, body_suffix)
         }
 
         # Check if reformatting is actually needed

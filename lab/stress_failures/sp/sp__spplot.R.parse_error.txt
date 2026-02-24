@@ -1,4 +1,0 @@
-<text>:182:78: unexpected ')'
-181:                          xlim = bbox(obj)[1, ylim = bbox(obj)[2,
-182:                          checkEmptyRC = TRUE, col.regions = get_col_regions())
-                                                                                  ^

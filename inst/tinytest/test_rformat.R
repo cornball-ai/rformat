@@ -98,6 +98,30 @@ expect_equal(
   info = "Multi-line strings in functions should not be duplicated"
 )
 
+# Long multi-line strings should not break later collapse/wrap passes
+# (regression: getParseData STR_CONST truncation + pass-2 call indent drift)
+css_lines <- rep("  .main-sidebar, .left-side { width: _WIDTH_; }", 40)
+css_text <- paste(css_lines, collapse = "\n")
+code <- paste0(
+  "f <- function(width, collapsed) {\n",
+  "    custom_css <- tags$head(tags$style(HTML(gsub(\n",
+  "        \"_WIDTH_\",\n",
+  "        width,\n",
+  "        fixed = TRUE,\n",
+  "        '\n", css_text, "\n'\n",
+  "    ))))\n",
+  "    dataValue <- shiny::restoreInput(id = \"sidebarCollapsed\", default = collapsed)\n",
+  "    dataValue\n",
+  "}\n"
+)
+fmt1 <- rformat(code)
+fmt2 <- rformat(fmt1)
+expect_equal(
+  fmt2,
+  fmt1,
+  info = "Pass 2 should preserve wrapped call indentation even with long STR_CONST elsewhere"
+)
+
 # Collapse multi-line c() to single line
 expect_equal(
   rformat("c(x,\n  y,\n  z\n)"),
@@ -551,6 +575,18 @@ expect_true(
 )
 r2 <- rformat(r1)
 expect_equal(r1, r2, info = "Expanded bare if-else in call should be idempotent")
+
+# --- Paren-aligned call continuation is idempotent ---
+code <- 'f <- function () {\n    dataValue <- shiny::restoreInput(id = "sidebarCollapsed", default = collapsed)\n}'
+r1 <- rformat(code)
+r2 <- rformat(r1)
+expect_equal(r1, r2,
+             info = "Paren-aligned call continuation should be idempotent")
+expect_true(
+    grepl("restoreInput\\(id = \"sidebarCollapsed\",\n\\s+default",
+          r1),
+    info = "Long call should be wrapped at comma"
+)
 
 # Short if-else in call stays inline
 code <- "x <- c(if (a) b else d, e)"
