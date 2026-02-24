@@ -38,137 +38,16 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
 
     # Split original into lines for comment preservation
     orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
-    is_large_file <- length(orig_lines) > 1500L
 
     terminals <- restore_truncated_str_const_tokens(terminals, orig_lines)
 
-    # Track nesting for indentation
-    brace_depth <- 0
-    paren_depth <- 0
-    paren_at_brace <- integer(0) # stack: paren_depth when each { opened
-
-    # First pass: calculate nesting depth at end of each line
+    # Compute nesting-based indent levels for each line
     max_line <- max(c(terminals$line1, length(orig_lines)))
-    line_end_brace <- integer(max_line)
-    line_end_paren <- integer(max_line)
-    line_end_pab <- integer(max_line) # paren_at_brace top-of-stack
-    # pab right after the first '}' on a line (before any subsequent '{').
-    # Used for '} else {' lines where end-of-line pab includes the new '{'.
-    line_pab_after_close <- integer(max_line)
-
-    for (i in seq_len(nrow(terminals))) {
-        tok <- terminals[i,]
-        ln <- tok$line1
-
-        if (tok$token == "'{'") {
-            # For control-flow braces (if/for/while/else bodies),
-            # preserve the enclosing paren context so body lines inside
-            # a call get an extra indent level. For bare brace args
-            # (tryCatch({...})) and function bodies, zero out paren
-            # contribution as before.
-            is_ctrl_brace <- FALSE
-            if (i >= 2L) {
-                pt <- terminals$token[i - 1L]
-                if (pt == "ELSE" || pt == "REPEAT") {
-                    is_ctrl_brace <- TRUE
-                } else if (pt == "')'") {
-                    # Check if this ) closes an if/for/while condition
-                    # by scanning back to find the matching ( and checking
-                    # the token before it
-                    pd2 <- 1L
-                    k <- i - 2L
-                    while (k >= 1L && pd2 > 0L) {
-                        if (terminals$token[k] == "')'") { pd2 <- pd2 + 1L }
-                        if (terminals$token[k] == "'('") { pd2 <- pd2 - 1L }
-                        if (pd2 > 0L) { k <- k - 1L }
-                    }
-                    if (k >= 2L &&
-                        terminals$token[k - 1L] %in% c("IF", "FOR", "WHILE")) {
-                        is_ctrl_brace <- TRUE
-                    }
-                }
-            }
-            if (is_ctrl_brace) {
-                # Preserve enclosing pab so paren contribution carries
-                # through into the control-flow body
-                enclosing_pab <- if (length(paren_at_brace) > 0) {
-                    paren_at_brace[length(paren_at_brace)]
-                } else {
-                    0L
-                }
-                paren_at_brace <- c(paren_at_brace, enclosing_pab)
-            } else {
-                paren_at_brace <- c(paren_at_brace, paren_depth)
-            }
-            brace_depth <- brace_depth + 1
-        } else if (tok$token == "'}'") {
-            brace_depth <- max(0, brace_depth - 1)
-            if (length(paren_at_brace) > 0) {
-                paren_at_brace <- paren_at_brace[-length(paren_at_brace)]
-            }
-            # Capture pab right after this close-brace
-            line_pab_after_close[ln] <- if (length(paren_at_brace) > 0) {
-                paren_at_brace[length(paren_at_brace)]
-            } else {
-                0L
-            }
-        } else if (tok$token %in% c("'('", "'['", "LBB")) {
-            paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
-        } else if (tok$token %in% c("')'", "']'")) {
-            paren_depth <- max(0, paren_depth - 1)
-        }
-
-        line_end_brace[ln] <- brace_depth
-        line_end_paren[ln] <- paren_depth
-        line_end_pab[ln] <- if (length(paren_at_brace) > 0) {
-            paren_at_brace[length(paren_at_brace)]
-        } else {
-            0L
-        }
-    }
-
-    # Fill in gaps (comment/blank lines inherit from previous)
-    for (ln in seq_len(max_line)) {
-        if (ln > 1 && line_end_brace[ln] == 0 && line_end_paren[ln] == 0) {
-            if (nrow(terminals[terminals$line1 == ln,]) == 0) {
-                line_end_brace[ln] <- line_end_brace[ln - 1]
-                line_end_paren[ln] <- line_end_paren[ln - 1]
-                line_end_pab[ln] <- line_end_pab[ln - 1]
-            }
-        }
-    }
-
-    # Calculate indent at START of each line
-    line_indent <- integer(max_line)
-    for (ln in seq_len(max_line)) {
-        if (ln == 1) {
-            line_indent[ln] <- 0
-        } else {
-            prev_brace <- line_end_brace[ln - 1]
-            prev_paren <- line_end_paren[ln - 1]
-
-            line_tokens <- terminals[terminals$line1 == ln,]
-            if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
-                prev_brace <- max(0, prev_brace - 1)
-            }
-            if (nrow(line_tokens) > 0 &&
-                line_tokens$token[1] %in% c("')'", "']'")) {
-                prev_paren <- max(0, prev_paren - 1)
-            }
-
-            # Subtract paren depth from before the innermost brace,
-            # so only parens opened *inside* the current brace block
-            # contribute to indentation (fixes brace-inside-paren)
-            prev_pab <- line_end_pab[ln - 1]
-            if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
-                # Use pab right after the '}' closes, not end-of-line pab.
-                # This matters for '} else {' where end-of-line pab includes
-                # the new '{' push and would zero out paren contribution.
-                prev_pab <- line_pab_after_close[ln]
-            }
-            line_indent[ln] <- prev_brace + max(0L, prev_paren - prev_pab)
-        }
-    }
+    nesting <- compute_nesting(terminals, max_line)
+    line_indent <- nesting$line_indent
+    line_end_brace <- nesting$line_end_brace
+    line_end_paren <- nesting$line_end_paren
+    line_end_pab <- nesting$line_end_pab
 
     # Build output
     if (is.character(indent)) {
@@ -256,9 +135,15 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                 } else {
                     line_level <- 0
                 }
-                out_lines[line_num] <- paste0(
-                    paste0(rep(indent_str, line_level), collapse = ""),
-                    trimws(line))
+                depth_prefix <- paste0(rep(indent_str, line_level),
+                                       collapse = "")
+                source_indent <- sub("\\S.*", "", line)
+                if (nzchar(source_indent) && source_indent != depth_prefix &&
+                    !grepl("\t", source_indent, fixed = TRUE)) {
+                    out_lines[line_num] <- paste0(source_indent, trimws(line))
+                } else {
+                    out_lines[line_num] <- paste0(depth_prefix, trimws(line))
+                }
             }
             next
         }
@@ -272,9 +157,12 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         depth_prefix <- paste0(rep(indent_str, line_level), collapse = "")
         if (cont_call_indent > 0L && cont_call_indent <= line_limit %/% 2L) {
             paren_prefix <- strrep(" ", cont_call_indent)
+            # Preserve depth-based indent from wrap passes: if the source
+            # line already has exactly the depth-based prefix, keep it
+            # rather than switching to paren-aligned (which wrap passes
+            # don't produce, causing idempotency drift).
             source_indent <- sub("\\S.*", "", line)
             if (source_indent == depth_prefix && depth_prefix != paren_prefix) {
-                # Source has depth-based indent from wrap_long_calls fallback
                 line_prefix <- depth_prefix
             } else {
                 line_prefix <- paren_prefix
@@ -339,54 +227,203 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         result <- paste0(result, "\n")
     }
 
-    if (is_large_file) {
-        return(result)
-    }
-
-    # Collapse multi-line calls that fit on one line
-    result <- apply_if_parseable(result, collapse_calls)
-
-    # Add braces to one-liner control flow (before wrapping, so bare
-    # bodies move to their own lines before line-length decisions)
-    result <- apply_if_parseable(result, add_control_braces)
-
-    # Expand bare if-else arguments in overlong calls before wrapping,
-    # so the braced form is stable and wrap passes see clean lines
-    result <- apply_if_parseable(result, expand_call_if_args,
-                                 line_limit = line_limit)
-
-    # Wrap long lines at operators (||, &&), then at commas
-    result <- apply_if_parseable(result, wrap_long_operators,
-                                 line_limit = line_limit)
-    result <- apply_if_parseable(result, wrap_long_calls, wrap = wrap,
-                                 line_limit = line_limit)
-
-    # Reformat function definitions
-    result <- apply_if_parseable(result, reformat_function_defs, wrap = wrap,
-                                 brace_style = brace_style,
-                                 line_limit = line_limit)
-    # Function-def rewrites can expose bare one-line control flow.
-    result <- apply_if_parseable(result, add_control_braces)
-
-    # Reformat inline if-else to multi-line
-    # Always expand long lines; optionally expand all
-    result <- apply_if_parseable(result, reformat_inline_if, line_limit = if (expand_if) {
-            0L
+    # Split into top-level expressions and format each independently.
+    # Each expression gets the full iteration budget since it's small.
+    chunks <- split_toplevel(result)
+    parts <- character(length(chunks))
+    for (i in seq_along(chunks)) {
+        if (chunks[[i]]$is_expr) {
+            parts[i] <- format_pipeline(chunks[[i]]$text, indent, wrap,
+                                        expand_if, brace_style, line_limit)
         } else {
-            line_limit
-        })
-
-    # Final expansion of bare if-else call args
-    result <- apply_if_parseable(result, expand_call_if_args,
-                                 line_limit = line_limit)
-
-    # Final wrap pass: earlier passes may have produced new long lines
-    result <- apply_if_parseable(result, wrap_long_operators,
-                                 line_limit = line_limit)
-    result <- apply_if_parseable(result, wrap_long_calls, wrap = wrap,
-                                 line_limit = line_limit)
+            parts[i] <- chunks[[i]]$text
+        }
+    }
+    result <- paste(parts, collapse = "\n")
+    if (!grepl("\n$", result) && nchar(result) > 0) {
+        result <- paste0(result, "\n")
+    }
     result
 }
+
+#' Compute Nesting Depth Per Line
+#'
+#' Shared function used by `format_tokens` and wrap passes to compute
+#' identical depth-based indent levels from the parse tree.
+#'
+#' @param terminals Terminal token data frame from `getParseData()`,
+#'   ordered by `line1, col1`.
+#' @param n_lines Number of source lines.
+#' @return Named list with `line_indent`, `line_end_brace`,
+#'   `line_end_paren`, `line_end_pab` (all integer vectors of length
+#'   `n_lines`).
+#' @keywords internal
+compute_nesting <- function (terminals, n_lines) {
+    brace_depth <- 0L
+    paren_depth <- 0L
+    paren_at_brace <- integer(0)
+
+    line_end_brace <- integer(n_lines)
+    line_end_paren <- integer(n_lines)
+    line_end_pab <- integer(n_lines)
+    line_pab_after_close <- integer(n_lines)
+
+    for (i in seq_len(nrow(terminals))) {
+        tok <- terminals[i,]
+        ln <- tok$line1
+
+        if (tok$token == "'{'") {
+            is_ctrl_brace <- FALSE
+            if (i >= 2L) {
+                pt <- terminals$token[i - 1L]
+                if (pt == "ELSE" || pt == "REPEAT") {
+                    is_ctrl_brace <- TRUE
+                } else if (pt == "')'") {
+                    pd2 <- 1L
+                    k <- i - 2L
+                    while (k >= 1L && pd2 > 0L) {
+                        if (terminals$token[k] == "')'") { pd2 <- pd2 + 1L }
+                        if (terminals$token[k] == "'('") { pd2 <- pd2 - 1L }
+                        if (pd2 > 0L) { k <- k - 1L }
+                    }
+                    if (k >= 2L &&
+                        terminals$token[k - 1L] %in% c("IF", "FOR", "WHILE")) {
+                        is_ctrl_brace <- TRUE
+                    }
+                }
+            }
+            if (is_ctrl_brace) {
+                enclosing_pab <- if (length(paren_at_brace) > 0) {
+                    paren_at_brace[length(paren_at_brace)]
+                } else {
+                    0L
+                }
+                paren_at_brace <- c(paren_at_brace, enclosing_pab)
+            } else {
+                paren_at_brace <- c(paren_at_brace, paren_depth)
+            }
+            brace_depth <- brace_depth + 1L
+        } else if (tok$token == "'}'") {
+            brace_depth <- max(0L, brace_depth - 1L)
+            if (length(paren_at_brace) > 0) {
+                paren_at_brace <- paren_at_brace[-length(paren_at_brace)]
+            }
+            line_pab_after_close[ln] <- if (length(paren_at_brace) > 0) {
+                paren_at_brace[length(paren_at_brace)]
+            } else {
+                0L
+            }
+        } else if (tok$token %in% c("'('", "'['", "LBB")) {
+            paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
+        } else if (tok$token %in% c("')'", "']'")) {
+            paren_depth <- max(0L, paren_depth - 1L)
+        }
+
+        line_end_brace[ln] <- brace_depth
+        line_end_paren[ln] <- paren_depth
+        line_end_pab[ln] <- if (length(paren_at_brace) > 0) {
+            paren_at_brace[length(paren_at_brace)]
+        } else {
+            0L
+        }
+    }
+
+    # Fill gaps (comment/blank lines inherit from previous)
+    for (ln in seq_len(n_lines)) {
+        if (ln > 1 && line_end_brace[ln] == 0 && line_end_paren[ln] == 0) {
+            if (nrow(terminals[terminals$line1 == ln,]) == 0) {
+                line_end_brace[ln] <- line_end_brace[ln - 1]
+                line_end_paren[ln] <- line_end_paren[ln - 1]
+                line_end_pab[ln] <- line_end_pab[ln - 1]
+            }
+        }
+    }
+
+    # Calculate indent at START of each line
+    line_indent <- integer(n_lines)
+    for (ln in seq_len(n_lines)) {
+        if (ln == 1) {
+            line_indent[ln] <- 0L
+        } else {
+            prev_brace <- line_end_brace[ln - 1]
+            prev_paren <- line_end_paren[ln - 1]
+
+            line_tokens <- terminals[terminals$line1 == ln,]
+            if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
+                prev_brace <- max(0L, prev_brace - 1L)
+            }
+            if (nrow(line_tokens) > 0 &&
+                line_tokens$token[1] %in% c("')'", "']'")) {
+                prev_paren <- max(0L, prev_paren - 1L)
+            }
+
+            prev_pab <- line_end_pab[ln - 1]
+            if (nrow(line_tokens) > 0 && line_tokens$token[1] == "'}'") {
+                prev_pab <- line_pab_after_close[ln]
+            }
+            line_indent[ln] <- prev_brace + max(0L, prev_paren - prev_pab)
+        }
+    }
+
+    list(line_indent = line_indent, line_end_brace = line_end_brace,
+         line_end_paren = line_end_paren, line_end_pab = line_end_pab)
+}
+
+#' Compute Indent at a Column Position
+#'
+#' Walks tokens on a line up to a given column, tracking braces and parens
+#' exactly as compute_nesting does. Returns the indent level that a
+#' hypothetical continuation line would receive.
+#'
+#' @param nesting Result from compute_nesting().
+#' @param line_toks Tokens on the line.
+#' @param line_num Line number.
+#' @param break_col Column position to stop at (inclusive).
+#' @return Integer indent level.
+#' @keywords internal
+compute_indent_at_col <- function (nesting, line_toks, line_num, break_col) {
+    # Start from state at end of previous line
+    if (line_num > 1L) {
+        brace_depth <- nesting$line_end_brace[line_num - 1L]
+        paren_depth <- nesting$line_end_paren[line_num - 1L]
+        pab <- nesting$line_end_pab[line_num - 1L]
+    } else {
+        brace_depth <- 0L
+        paren_depth <- 0L
+        pab <- 0L
+    }
+    pab_stack <- if (brace_depth > 0L) rep(pab, brace_depth) else integer(0)
+
+    for (j in seq_len(nrow(line_toks))) {
+        tok_j <- line_toks[j,]
+        if (tok_j$col1 > break_col) { break }
+        if (tok_j$token == "'{'") {
+            pab_stack <- c(pab_stack, paren_depth)
+            brace_depth <- brace_depth + 1L
+        } else if (tok_j$token == "'}'") {
+            brace_depth <- max(0L, brace_depth - 1L)
+            if (length(pab_stack) > 0L) {
+                pab_stack <- pab_stack[-length(pab_stack)]
+            }
+        } else if (tok_j$token %in% c("'('", "'['")) {
+            paren_depth <- paren_depth + 1L
+        } else if (tok_j$token == "LBB") {
+            paren_depth <- paren_depth + 2L
+        } else if (tok_j$token %in% c("')'", "']'")) {
+            paren_depth <- max(0L, paren_depth - 1L)
+        } else if (tok_j$token == "']]'") {
+            paren_depth <- max(0L, paren_depth - 2L)
+        }
+    }
+
+    cur_pab <- if (length(pab_stack) > 0L) {
+        pab_stack[length(pab_stack)]
+    } else {
+        0L
+    }
+    brace_depth + max(0L, paren_depth - cur_pab)
+}
+
 #' Format Tokens on a Single Line
 #'
 #' @param tokens Data frame of tokens for one line.
@@ -501,14 +538,15 @@ restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
                 col_to_charpos(orig_lines[tok$line1], tok$col2))
         } else {
             parts <- c(
-                substring(orig_lines[tok$line1],
-                          col_to_charpos(orig_lines[tok$line1], tok$col1)),
+                       substring(orig_lines[tok$line1],
+                                 col_to_charpos(orig_lines[tok$line1],
+                        tok$col1)),
                 if (tok$line2 > tok$line1 + 1) {
                     orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
                 },
                        substring(orig_lines[tok$line2], 1,
                                  col_to_charpos(orig_lines[tok$line2],
-                                     tok$col2))
+                        tok$col2))
             )
             terminals$text[i] <- paste(parts, collapse = "\n")
         }
@@ -718,7 +756,7 @@ extract_expr_text <- function (lines, tokens, target_indent) {
     first_tok <- tokens[tokens$line1 == start_line,][1,]
     first_line_text <- substring(lines[start_line],
                                  col_to_charpos(lines[start_line],
-                                     first_tok$col1))
+            first_tok$col1))
 
     # Middle lines: full line content, re-indented
     result_lines <- first_line_text
@@ -735,6 +773,129 @@ extract_expr_text <- function (lines, tokens, target_indent) {
     }
 
     paste(result_lines, collapse = "")
+}
+
+#' Split Code into Top-Level Expressions
+#'
+#' Parses code to find top-level expressions, returning a list of chunks.
+#' Each chunk is either an expression (code string) or an inter-expression
+#' gap (comments, blank lines). Chunks concatenate back to the original.
+#'
+#' @param code Character string of R code.
+#' @return List of `list(text = "...", is_expr = TRUE/FALSE)` pairs.
+#' @keywords internal
+split_toplevel <- function (code) {
+    parsed <- tryCatch(parse(text = code, keep.source = TRUE),
+                       error = function (e) NULL)
+
+    if (is.null(parsed)) {
+        return(list(list(text = code, is_expr = FALSE)))
+    }
+
+    pd <- getParseData(parsed)
+    if (is.null(pd) || nrow(pd) == 0) {
+        return(list(list(text = code, is_expr = FALSE)))
+    }
+
+    # Find top-level expr nodes
+    top_exprs <- pd[pd$parent == 0L & pd$token == "expr",]
+    if (nrow(top_exprs) == 0) {
+        return(list(list(text = code, is_expr = FALSE)))
+    }
+
+    lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    n_lines <- length(lines)
+    chunks <- list()
+    prev_end <- 0L
+
+    for (k in seq_len(nrow(top_exprs))) {
+        expr_start <- top_exprs$line1[k]
+        expr_end <- top_exprs$line2[k]
+
+        # Gap before this expression
+        if (expr_start > prev_end + 1L) {
+            gap_lines <- lines[(prev_end + 1L):(expr_start - 1L)]
+            chunks[[length(chunks) + 1L]] <- list(
+                text = paste(gap_lines, collapse = "\n"), is_expr = FALSE)
+        }
+
+        # The expression itself
+        expr_lines <- lines[expr_start:expr_end]
+        chunks[[length(chunks) + 1L]] <- list(
+            text = paste(expr_lines, collapse = "\n"), is_expr = TRUE)
+
+        prev_end <- expr_end
+    }
+
+    # Trailing gap after last expression
+    if (prev_end < n_lines) {
+        gap_lines <- lines[(prev_end + 1L):n_lines]
+        chunks[[length(chunks) + 1L]] <- list(
+            text = paste(gap_lines, collapse = "\n"), is_expr = FALSE)
+    }
+
+    chunks
+}
+
+#' Apply Formatting Pipeline to a Code Fragment
+#'
+#' Runs collapse, brace, wrap, function-def, and inline-if passes on a
+#' single code string. Designed to operate on individual top-level
+#' expressions so each gets the full iteration budget.
+#'
+#' @param code Character string of R code.
+#' @param indent Indent size or string.
+#' @param wrap Continuation style.
+#' @param expand_if Expand inline if-else.
+#' @param brace_style Brace placement style.
+#' @param line_limit Maximum line length.
+#' @return Formatted code string.
+#' @keywords internal
+format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
+                             line_limit) {
+    # Collapse multi-line calls that fit on one line
+    code <- apply_if_parseable(code, collapse_calls)
+
+    # Add braces to one-liner control flow (before wrapping, so bare
+    # bodies move to their own lines before line-length decisions)
+    code <- apply_if_parseable(code, add_control_braces)
+
+    # Expand bare if-else arguments in overlong calls before wrapping,
+    # so the braced form is stable and wrap passes see clean lines
+    code <- apply_if_parseable(code, expand_call_if_args,
+                               line_limit = line_limit)
+
+    # Wrap long lines at operators (||, &&), then at commas
+    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
+                               line_limit = line_limit)
+    code <- apply_if_parseable(code, wrap_long_calls, wrap = wrap,
+                               indent = indent, line_limit = line_limit)
+
+    # Reformat function definitions
+    code <- apply_if_parseable(code, reformat_function_defs, wrap = wrap,
+                               brace_style = brace_style,
+                               line_limit = line_limit)
+    # Function-def rewrites can expose bare one-line control flow.
+    code <- apply_if_parseable(code, add_control_braces)
+
+    # Reformat inline if-else to multi-line
+    # Always expand long lines; optionally expand all
+    code <- apply_if_parseable(code, reformat_inline_if, line_limit = if (expand_if) {
+            0L
+        } else {
+            line_limit
+        })
+
+    # Final expansion of bare if-else call args
+    code <- apply_if_parseable(code, expand_call_if_args,
+                               line_limit = line_limit)
+
+    # Final wrap pass: earlier passes may have produced new long lines
+    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
+                               line_limit = line_limit)
+    code <- apply_if_parseable(code, wrap_long_calls, wrap = wrap,
+                               indent = indent, line_limit = line_limit)
+    code
 }
 
 #' Format Blank Lines
@@ -785,31 +946,5 @@ apply_if_parseable <- function (code, fn, ...) {
     }
 
     updated
-}
-
-#' Size-Aware Iteration Budget
-#'
-#' Limits expensive parse/rewrite loops on very large files.
-#'
-#' @param code Code string.
-#' @param default_max Default maximum iterations.
-#' @param mode Rewrite family. One of `"collapse"`, `"funcdef"`,
-#'   `"control"`, `"wrap"`, `"inline_if"`, or `"generic"`.
-#' @return Integer iteration budget.
-#' @keywords internal
-iteration_budget <- function (code, default_max, mode = "generic") {
-    n_lines <- length(strsplit(code, "\n", fixed = TRUE)[[1]])
-    # On very large files, one-at-a-time parse/rewrite loops are too costly.
-    # Keep only the base token formatting pass.
-    if (n_lines > 1500L) {
-        return(0L)
-    }
-    if (n_lines > 800L) {
-        return(min(default_max, 50L))
-    }
-    if (n_lines > 400L) {
-        return(min(default_max, 100L))
-    }
-    default_max
 }
 

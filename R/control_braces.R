@@ -20,7 +20,7 @@ fix_else_placement <- function (code) {
 #' @keywords internal
 add_control_braces <- function (code) {
     changed <- TRUE
-    max_iterations <- iteration_budget(code, 200L, mode = "control")
+    max_iterations <- 200L
 
     while (changed && max_iterations > 0) {
         max_iterations <- max_iterations - 1
@@ -114,7 +114,7 @@ add_one_control_brace <- function (code) {
                             terminals$col1 < terminals$col1[scan],]
                         if (nrow(root_before) > 0 &&
                             any(root_before$token %in% c("LEFT_ASSIGN",
-                                "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
+                                    "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
                             skip_chain <- TRUE
                         }
                         break
@@ -217,7 +217,7 @@ add_one_control_brace <- function (code) {
                 if (next_tok$line1 > btok$line1) {
                     # If current line ends with assignment, RHS continues
                     if (btok$token %in% c("LEFT_ASSIGN", "EQ_ASSIGN",
-                        "RIGHT_ASSIGN")) {
+                            "RIGHT_ASSIGN")) {
                         body_end_idx <- body_end_idx + 1
                         next
                     }
@@ -235,6 +235,11 @@ add_one_control_brace <- function (code) {
         if (body_end_idx > nrow(terminals)) {
             body_end_idx <- nrow(terminals)
         }
+
+        # If body walk hit an enclosing close bracket (e.g., else body }
+        # where } closes outer block), skip — adding braces here would
+        # capture the enclosing bracket inside the new block
+        if (body_depth < 0) { next }
 
         body_tokens <- terminals[body_start_idx:body_end_idx,]
         # If body spans multiple lines, skip to avoid collapsing blocks
@@ -343,8 +348,8 @@ add_one_control_brace <- function (code) {
                 ctrl_indent <- sub("^(\\s*).*", "\\1", lines[ctrl_line])
                 if_rest <- paste0(ctrl_indent,
                                   trimws(substring(
-                                      lines[else_body_start$line1],
-                                      else_body_start$col1)))
+                            lines[else_body_start$line1],
+                            else_body_start$col1)))
                 if (body_has_comment || nchar(new_line) > 80L) {
                     new_lines_vec <- c(paste0(prefix, open_brace_suffix),
                                        paste0(inner_indent, body_text),
@@ -387,6 +392,10 @@ add_one_control_brace <- function (code) {
                 if (else_end_idx > nrow(terminals)) {
                     else_end_idx <- nrow(terminals)
                 }
+
+                # If else body walk hit an enclosing close bracket,
+                # skip — adding braces would capture it inside the block
+                if (else_depth < 0) { next }
 
                 else_body_tokens <- terminals[else_body_idx:else_end_idx,]
                 if (any(else_body_tokens$token %in% complex_body_tokens)) {
