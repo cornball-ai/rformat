@@ -797,8 +797,10 @@ split_toplevel <- function (code) {
         return(list(list(text = code, is_expr = FALSE)))
     }
 
-    # Find top-level expr nodes
-    top_exprs <- pd[pd$parent == 0L & pd$token == "expr",]
+    # Find top-level expr nodes (R's parser uses both "expr" and
+    # "expr_or_assign_or_help" for top-level statements)
+    top_exprs <- pd[pd$parent == 0L & pd$token %in%
+        c("expr", "expr_or_assign_or_help"),]
     if (nrow(top_exprs) == 0) {
         return(list(list(text = code, is_expr = FALSE)))
     }
@@ -885,16 +887,22 @@ format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
         } else {
             line_limit
         })
+    # Inline-if expansion can expose new bare control flow
+    code <- apply_if_parseable(code, add_control_braces)
 
     # Final expansion of bare if-else call args
     code <- apply_if_parseable(code, expand_call_if_args,
                                line_limit = line_limit)
 
-    # Final wrap pass: earlier passes may have produced new long lines
+    # Final wrap pass: earlier passes may have produced new long lines.
+    # Operator wrap runs both before and after call wrap because call
+    # wrapping can leave operator+comment tails that exceed the limit.
     code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
                                line_limit = line_limit)
     code <- apply_if_parseable(code, wrap_long_calls, wrap = wrap,
                                indent = indent, line_limit = line_limit)
+    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
+                               line_limit = line_limit)
     code
 }
 

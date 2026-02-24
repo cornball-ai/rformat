@@ -1,293 +1,134 @@
 #!/usr/bin/env r
 #
-# Stress test rformat against top CRAN packages
+# Stress test rformat against CRAN packages
 #
-# Downloads source tarballs, extracts, formats R/ directory,
-# verifies all formatted files still parse. Records failures.
+# Takes a package name as argument, downloads source, formats all R/ files,
+# checks parsing and idempotency. Outputs one TSV line per file to stdout.
 #
 # Usage:
-#   r lab/stress_test.R                    # run all 100
-#   N=10 r lab/stress_test.R               # run first 10
-#   PKGS="dplyr rlang" r lab/stress_test.R # run specific packages
+#   r lab/stress_test.R dplyr                          # one package
+#   echo dplyr | r lab/stress_test.R                   # from stdin
+#   cat packages.txt | parallel -j8 --timeout 30 r lab/stress_test.R {}  # parallel
+#
+# Output columns (tab-separated):
+#   package  file  status  lines  bytes  fmt_ms  idemp_ms
 
 library(rformat)
 
-packages <- c(
-    # Core / Infrastructure
-    "Rcpp", "rlang", "vctrs", "glue", "cli",
-    "withr", "lifecycle", "magrittr", "pillar", "crayon",
-    # Data Manipulation
-    "dplyr", "tidyr", "tibble", "readr", "stringr",
-    "forcats", "lubridate", "purrr", "data.table", "janitor",
-    # Visualization
-    "ggplot2", "scales", "patchwork", "cowplot", "plotly",
-    "lattice", "leaflet", "ggridges", "viridis", "DT",
-    # Shiny / Web
-    "shiny", "shinydashboard", "bslib", "htmltools", "httpuv",
-    "httr", "httr2", "plumber", "rvest", "xml2",
-    # Modeling / Stats
-    "caret", "recipes", "parsnip", "workflows", "yardstick",
-    "glmnet", "lme4", "survival", "brms", "xgboost",
-    # Devtools / Packaging
-    "testthat", "tinytest", "devtools", "usethis", "roxygen2",
-    "pkgdown", "covr", "remotes", "pak", "renv",
-    # Data Import / Storage
-    "readxl", "writexl", "DBI", "RSQLite", "duckdb",
-    "arrow", "sparklyr", "pins", "qs2", "fst",
-    # Time Series / Specialized
-    "forecast", "zoo", "xts", "tsibble", "fable",
-    "igraph", "sf", "terra", "sp", "rmarkdown",
-    # String / Parsing / Lang
-    "stringi", "jsonlite", "yaml", "digest", "R6",
-    "xmlparsedata", "evaluate", "callr", "processx", "here",
-    # Performance / Parallel
-    "future", "furrr", "parallelly", "RcppParallel", "bench",
-    "profvis", "memoise", "progress", "curl", "openssl"
-)
-
-# Parse env vars for subsetting
-n_env <- Sys.getenv("N", "")
-pkgs_env <- Sys.getenv("PKGS", "")
-
-if (nzchar(pkgs_env)) {
-    packages <- strsplit(trimws(pkgs_env), "\\s+")[[1]]
-} else if (nzchar(n_env)) {
-    packages <- head(packages, as.integer(n_env))
+# Package name from argv (littler) or stdin
+if (exists("argv") && length(argv) > 0) {
+    pkg <- argv[1]
+} else {
+    pkg <- trimws(readLines("stdin", n = 1, warn = FALSE))
+}
+if (!nzchar(pkg)) {
+    stop("Usage: r lab/stress_test.R <package>")
 }
 
-# Per-file timeout (seconds) — skip files that take too long
-file_timeout <- as.integer(Sys.getenv("TIMEOUT", "10"))
+# Download source tarball (cached)
+cache_dir <- path.expand("~/.cache/rformat_cran_src")
+dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
 
-cat(sprintf("Stress testing rformat against %d CRAN packages\n", length(packages)))
-cat(sprintf("Per-file timeout: %ds\n\n", file_timeout))
-
-# Setup temp directory
-work_dir <- file.path(tempdir(), "rformat_stress")
-dir.create(work_dir, showWarnings = FALSE, recursive = TRUE)
-
-# Track results
-results <- data.frame(
-    package = character(),
-    r_files = integer(),
-    parsed_before = integer(),
-    formatted_ok = integer(),
-    parse_failures = integer(),
-    not_idempotent = integer(),
-    timeouts = integer(),
-    status = character(),
-    errors = character(),
-    stringsAsFactors = FALSE
-)
-
-for (pkg in packages) {
-    cat(sprintf("[%d/%d] %s ... ", match(pkg, packages), length(packages), pkg))
-
-    row <- list(
-        package = pkg, r_files = 0L, parsed_before = 0L,
-        formatted_ok = 0L, parse_failures = 0L, not_idempotent = 0L,
-        timeouts = 0L,
-        status = "OK", errors = ""
-    )
-
-    # Download source tarball
-    pkg_dir <- file.path(work_dir, pkg)
-    if (dir.exists(pkg_dir)) unlink(pkg_dir, recursive = TRUE)
-
+cached <- list.files(cache_dir, pattern = paste0("^", pkg, "_.*\\.tar\\.gz$"),
+                     full.names = TRUE)
+if (length(cached) > 0) {
+    tarball <- cached[1]
+} else {
     dl <- tryCatch(
-        download.packages(pkg, destdir = work_dir, type = "source",
+        download.packages(pkg, destdir = cache_dir, type = "source",
                           repos = "https://cloud.r-project.org",
                           quiet = TRUE),
         error = function(e) NULL
     )
-
     if (is.null(dl) || nrow(dl) == 0) {
-        cat("SKIP (download failed)\n")
-        row$status <- "SKIP"
-        row$errors <- "download failed"
-        results <- rbind(results, as.data.frame(row, stringsAsFactors = FALSE))
-        next
+        cat(paste(pkg, "SKIP", "", 0, 0, 0, 0, sep = "\t"), "\n", sep = "")
+        quit(save = "no", status = 0)
     }
-
     tarball <- dl[1, 2]
+}
 
-    # Extract
-    untar(tarball, exdir = work_dir)
-    unlink(tarball)
+# Extract to temp (per-package dir avoids race conditions under parallel)
+work_dir <- file.path(tempdir(), paste0("rformat_stress_", pkg, "_", Sys.getpid()))
+dir.create(work_dir, showWarnings = FALSE, recursive = TRUE)
+pkg_dir <- file.path(work_dir, pkg)
+if (dir.exists(pkg_dir)) unlink(pkg_dir, recursive = TRUE)
+untar(tarball, exdir = work_dir)
 
-    # Find R/ directory
-    r_dir <- file.path(pkg_dir, "R")
-    if (!dir.exists(r_dir)) {
-        cat("SKIP (no R/ directory)\n")
-        row$status <- "SKIP"
-        row$errors <- "no R/ directory"
-        results <- rbind(results, as.data.frame(row, stringsAsFactors = FALSE))
-        unlink(pkg_dir, recursive = TRUE)
-        next
-    }
-
-    r_files <- list.files(r_dir, pattern = "\\.[Rr]$", full.names = TRUE,
-                          recursive = TRUE)
-    row$r_files <- length(r_files)
-
-    if (length(r_files) == 0) {
-        cat("SKIP (no .R files)\n")
-        row$status <- "SKIP"
-        row$errors <- "no .R files"
-        results <- rbind(results, as.data.frame(row, stringsAsFactors = FALSE))
-        unlink(pkg_dir, recursive = TRUE)
-        next
-    }
-
-    # Check which files parse before formatting
-    parseable <- vapply(r_files, function(f) {
-        code <- paste(readLines(f, warn = FALSE), collapse = "\n")
-        !is.null(tryCatch(parse(text = code, keep.source = TRUE),
-                           error = function(e) NULL))
-    }, logical(1))
-
-    row$parsed_before <- sum(parseable)
-    r_files <- r_files[parseable]
-
-    if (length(r_files) == 0) {
-        cat("SKIP (no parseable files)\n")
-        row$status <- "SKIP"
-        row$errors <- "no parseable files"
-        results <- rbind(results, as.data.frame(row, stringsAsFactors = FALSE))
-        unlink(pkg_dir, recursive = TRUE)
-        next
-    }
-
-    # Format each file and check parsing + idempotence
-    failures <- character()
-    not_idempotent_files <- character()
-    timed_out <- character()
-
-    for (f in r_files) {
-        original <- paste(readLines(f, warn = FALSE), collapse = "\n")
-
-        # Format with timeout
-        formatted <- tryCatch({
-            setTimeLimit(elapsed = file_timeout)
-            on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
-            rformat(original)
-        },
-        error = function(e) {
-            if (grepl("time limit|elapsed", e$message, ignore.case = TRUE)) {
-                structure("TIMEOUT", class = "timeout_marker")
-            } else {
-                NULL
-            }
-        },
-        warning = function(w) {
-            suppressWarnings(rformat(original))
-        })
-
-        if (inherits(formatted, "timeout_marker")) {
-            timed_out <- c(timed_out, basename(f))
-            next
-        }
-
-        if (is.null(formatted)) {
-            failures <- c(failures, basename(f))
-            next
-        }
-
-        # Verify formatted code parses
-        parsed <- tryCatch(
-            parse(text = formatted, keep.source = TRUE),
-            error = function(e) e
-        )
-
-        if (inherits(parsed, "error")) {
-            failures <- c(failures, basename(f))
-        } else {
-            row$formatted_ok <- row$formatted_ok + 1L
-
-            # Idempotence check: fmt(fmt(x)) == fmt(x)
-            formatted2 <- tryCatch(
-                suppressWarnings(rformat(formatted)),
-                error = function(e) NULL
-            )
-            if (!is.null(formatted2) && formatted2 != formatted) {
-                not_idempotent_files <- c(not_idempotent_files, basename(f))
-            }
-        }
-    }
-
-    row$parse_failures <- length(failures)
-    row$not_idempotent <- length(not_idempotent_files)
-    row$timeouts <- length(timed_out)
-
-    if (length(failures) > 0) {
-        row$status <- "FAIL"
-        row$errors <- paste(failures, collapse = ", ")
-        cat(sprintf("FAIL (%d/%d broken: %s)\n",
-                    length(failures), length(r_files),
-                    paste(head(failures, 3), collapse = ", ")))
-    } else if (length(not_idempotent_files) > 0) {
-        row$status <- "IDEMP"
-        row$errors <- paste(not_idempotent_files, collapse = ", ")
-        cat(sprintf("IDEMP (%d files, %d not idempotent: %s)\n",
-                    row$formatted_ok, length(not_idempotent_files),
-                    paste(head(not_idempotent_files, 3), collapse = ", ")))
-    } else if (length(timed_out) > 0) {
-        row$status <- "OK*"
-        row$errors <- paste("timeout:", paste(timed_out, collapse = ", "))
-        cat(sprintf("OK* (%d files, %d timed out)\n",
-                    row$formatted_ok, length(timed_out)))
-    } else {
-        cat(sprintf("OK (%d files)\n", row$formatted_ok))
-    }
-
-    results <- rbind(results, as.data.frame(row, stringsAsFactors = FALSE))
+r_dir <- file.path(pkg_dir, "R")
+if (!dir.exists(r_dir)) {
+    cat(paste(pkg, "SKIP", "", 0, 0, 0, 0, sep = "\t"), "\n", sep = "")
     unlink(pkg_dir, recursive = TRUE)
+    quit(save = "no", status = 0)
 }
 
-# Summary
-cat("\n")
-cat(strrep("=", 60), "\n")
-cat("RESULTS\n")
-cat(strrep("=", 60), "\n\n")
-
-ok <- results[results$status %in% c("OK", "OK*"),]
-fail <- results[results$status == "FAIL",]
-idemp <- results[results$status == "IDEMP",]
-skip <- results[results$status == "SKIP",]
-
-cat(sprintf("  OK:   %d packages (%d files total)\n",
-            nrow(ok), sum(ok$formatted_ok)))
-cat(sprintf("  FAIL: %d packages (parse errors)\n", nrow(fail)))
-cat(sprintf("  IDEMP: %d packages (not idempotent)\n", nrow(idemp)))
-cat(sprintf("  SKIP: %d packages\n", nrow(skip)))
-
-if (sum(results$timeouts) > 0) {
-    cat(sprintf("  Timeouts: %d files across %d packages\n",
-                sum(results$timeouts), sum(results$timeouts > 0)))
+r_files <- list.files(r_dir, pattern = "\\.[Rr]$", full.names = TRUE,
+                      recursive = TRUE)
+if (length(r_files) == 0) {
+    cat(paste(pkg, "SKIP", "", 0, 0, 0, 0, sep = "\t"), "\n", sep = "")
+    unlink(pkg_dir, recursive = TRUE)
+    quit(save = "no", status = 0)
 }
-cat("\n")
 
-if (nrow(fail) > 0) {
-    cat("PARSE FAILURES:\n")
-    for (i in seq_len(nrow(fail))) {
-        cat(sprintf("  %s: %s\n", fail$package[i], fail$errors[i]))
+# Format each file: output one TSV line per file
+# Columns: package  file  status  lines  bytes  fmt_ms  idemp_ms
+for (f in r_files) {
+    bn <- basename(f)
+    original <- paste(readLines(f, warn = FALSE), collapse = "\n")
+    n_lines <- length(strsplit(original, "\n", fixed = TRUE)[[1]])
+    n_bytes <- nchar(original, type = "bytes")
+
+    # Check original parses
+    if (is.null(tryCatch(parse(text = original, keep.source = TRUE),
+                         error = function(e) NULL))) {
+        cat(paste(pkg, bn, "NOPARSE", n_lines, n_bytes, 0, 0, sep = "\t"),
+            "\n", sep = "")
+        next
     }
-    cat("\n")
-}
 
-if (nrow(idemp) > 0) {
-    cat("NOT IDEMPOTENT:\n")
-    for (i in seq_len(nrow(idemp))) {
-        cat(sprintf("  %s: %s\n", idemp$package[i], idemp$errors[i]))
+    # Format pass 1
+    t0 <- proc.time()[["elapsed"]]
+    formatted <- tryCatch(
+        withCallingHandlers(rformat(original),
+            warning = function(w) invokeRestart("muffleWarning")),
+        error = function(e) NULL
+    )
+    fmt_ms <- round((proc.time()[["elapsed"]] - t0) * 1000)
+
+    if (is.null(formatted)) {
+        cat(paste(pkg, bn, "ERROR", n_lines, n_bytes, fmt_ms, 0, sep = "\t"),
+            "\n", sep = "")
+        next
     }
-    cat("\n")
+
+    # Verify formatted code parses
+    parsed <- tryCatch(parse(text = formatted, keep.source = TRUE),
+                       error = function(e) e)
+
+    if (inherits(parsed, "error")) {
+        cat(paste(pkg, bn, "FAIL", n_lines, n_bytes, fmt_ms, 0, sep = "\t"),
+            "\n", sep = "")
+        next
+    }
+
+    # Idempotence check (format pass 2)
+    t1 <- proc.time()[["elapsed"]]
+    formatted2 <- tryCatch(
+        withCallingHandlers(rformat(formatted),
+            warning = function(w) invokeRestart("muffleWarning")),
+        error = function(e) NULL)
+    idemp_ms <- round((proc.time()[["elapsed"]] - t1) * 1000)
+
+    if (!is.null(formatted2) && formatted2 != formatted) {
+        cat(paste(pkg, bn, "IDEMP", n_lines, n_bytes, fmt_ms, idemp_ms,
+                  sep = "\t"), "\n", sep = "")
+    } else {
+        cat(paste(pkg, bn, "OK", n_lines, n_bytes, fmt_ms, idemp_ms,
+                  sep = "\t"), "\n", sep = "")
+    }
 }
 
-total_files <- sum(results$formatted_ok) + sum(results$parse_failures)
-cat(sprintf("Total: %d/%d files formatted successfully (%.1f%%)\n",
-            sum(results$formatted_ok), total_files,
-            100 * sum(results$formatted_ok) / max(total_files, 1)))
+# Sentinel: signals package completed (not killed by --timeout)
+cat(paste(pkg, "_DONE_", "DONE", length(r_files), 0, 0, 0, sep = "\t"),
+    "\n", sep = "")
 
-# Save results
-out_file <- file.path("lab", "stress_test_results.csv")
-write.csv(results, out_file, row.names = FALSE)
-cat(sprintf("\nDetailed results saved to %s\n", out_file))
+unlink(work_dir, recursive = TRUE)

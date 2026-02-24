@@ -71,8 +71,43 @@ expand_one_call_if_arg <- function (code, line_limit = 80L) {
         for (j in seq_len(nrow(before_toks))) {
             bt <- before_toks$token[j]
             if (bt == "'{'") {
-                paren_at_brace <- c(paren_at_brace,
-                                    paren_depth_at_if + bracket_depth_at_if)
+                # Control-flow braces inherit enclosing pab (matching
+                # compute_nesting); non-control braces capture paren_depth.
+                is_ctrl <- FALSE
+                if (j >= 2L) {
+                    pt <- before_toks$token[j - 1L]
+                    if (pt == "ELSE" || pt == "REPEAT") {
+                        is_ctrl <- TRUE
+                    } else if (pt == "')'") {
+                        pd2 <- 1L
+                        k2 <- j - 2L
+                        while (k2 >= 1L && pd2 > 0L) {
+                            if (before_toks$token[k2] == "')'") {
+                                pd2 <- pd2 + 1L
+                            }
+                            if (before_toks$token[k2] == "'('") {
+                                pd2 <- pd2 - 1L
+                            }
+                            if (pd2 > 0L) { k2 <- k2 - 1L }
+                        }
+                        if (k2 >= 2L &&
+                            before_toks$token[k2 - 1L] %in% c("IF", "FOR",
+                                "WHILE")) {
+                            is_ctrl <- TRUE
+                        }
+                    }
+                }
+                if (is_ctrl) {
+                    enc_pab <- if (length(paren_at_brace) > 0) {
+                        paren_at_brace[length(paren_at_brace)]
+                    } else {
+                        0L
+                    }
+                    paren_at_brace <- c(paren_at_brace, enc_pab)
+                } else {
+                    paren_at_brace <- c(paren_at_brace,
+                                        paren_depth_at_if + bracket_depth_at_if)
+                }
                 brace_depth_at_if <- brace_depth_at_if + 1L
             } else if (bt == "'}'") {
                 brace_depth_at_if <- max(0L, brace_depth_at_if - 1L)
@@ -202,6 +237,14 @@ expand_one_call_if_arg <- function (code, line_limit = 80L) {
             if (ftok$token == "LBB") {
                 false_paren_depth <- false_paren_depth + 2L
             }
+            if (ftok$token == "','") {
+                # Comma at depth 0 = next argument of enclosing call
+                if (false_paren_depth == 0L && false_brace_depth == 0L &&
+                    false_if_depth == 0L) {
+                    false_end <- false_end - 1
+                    break
+                }
+            }
             if (ftok$token %in% c("')'", "']'")) {
                 # Stop if we close a paren that was open before the if-else
                 if (false_paren_depth == 0L && false_brace_depth == 0L &&
@@ -223,7 +266,12 @@ expand_one_call_if_arg <- function (code, line_limit = 80L) {
 
             if (prev_paren_depth > 0L && false_paren_depth == 0L &&
                 false_brace_depth == 0L && false_if_depth == 0L) {
-                break
+                # Don't break if next token is [ or [[ (indexing the result);
+                # let the loop continue to process the [ normally so
+                # false_paren_depth gets incremented.
+                next_ok <- false_end + 1 <= nrow(terminals) &&
+                terminals$token[false_end + 1] %in% c("'['", "LBB")
+                if (!next_ok) { break }
             }
 
             if (ftok$line1 > false_start_line && false_paren_depth <= 0L &&
