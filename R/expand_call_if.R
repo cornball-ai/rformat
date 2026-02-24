@@ -95,6 +95,28 @@ expand_one_call_if_arg <- function (code, line_limit = 80L) {
         }
         if (paren_depth_at_if < 1L) { next }
 
+        # Skip if-else inside function formal parens — reformat_one_function
+        # owns signature layout and would collapse the expansion back,
+        # causing an expand/collapse oscillation.
+        in_formals <- FALSE
+        scan_depth <- 0L
+        for (j in rev(seq_len(nrow(before_toks)))) {
+            bt <- before_toks$token[j]
+            if (bt == "')'") {
+                scan_depth <- scan_depth + 1L
+            } else if (bt == "'('") {
+                if (scan_depth == 0L) {
+                    # Found the innermost enclosing open paren
+                    if (j > 1L && before_toks$token[j - 1L] == "FUNCTION") {
+                        in_formals <- TRUE
+                    }
+                    break
+                }
+                scan_depth <- scan_depth - 1L
+            }
+        }
+        if (in_formals) { next }
+
         # Verify it's a bare if-else (no '{' after condition close-paren)
         open_paren_idx <- ii + 1
         if (open_paren_idx > nrow(terminals)) { next }
