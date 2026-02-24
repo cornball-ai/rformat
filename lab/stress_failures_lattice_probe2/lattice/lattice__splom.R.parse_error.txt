@@ -1,4 +1,0 @@
-<text>:145:9: unexpected '}'
-144:             for (j in 1:n.var)
-145:         }
-             ^
