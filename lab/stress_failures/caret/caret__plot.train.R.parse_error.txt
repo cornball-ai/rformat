@@ -1,4 +1,0 @@
-<text>:175:54: unexpected '}'
-174:             {
-175:                 if (p >= 2) { for (i in 3:ncol(dat)) }
-                                                          ^

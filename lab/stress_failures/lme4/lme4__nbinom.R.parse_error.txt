@@ -1,4 +1,0 @@
-<text>:10:1: unexpected '}'
-9:     getNBdisp.fam <- function (familyString)
-10: }
-    ^
