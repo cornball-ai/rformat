@@ -1,4 +1,0 @@
-<text>:171:5: unexpected 'else'
-170:     if (identical(skip, "__auto__")) { skip <- if (yaml) 0L } else { -1L }
-171:     else
-         ^

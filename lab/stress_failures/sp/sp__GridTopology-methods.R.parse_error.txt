@@ -1,4 +1,0 @@
-<text>:34:9: unexpected '}'
-33:             ret[[i]] <- obj@cellcentre.offset[i] +
-34:         }
-            ^
