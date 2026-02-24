@@ -7,9 +7,9 @@
 
 | Function | Arguments |
 |----------|-----------|
-| `rformat` | code, indent, wrap, expand_if, brace_style, line_limit |
-| `rformat_dir` | path, recursive, dry_run, indent, wrap, expand_if, brace_style, line_limit |
-| `rformat_file` | path, output, dry_run, indent, wrap, expand_if, brace_style, line_limit |
+| `rformat` | code, indent, wrap, expand_if, brace_style, line_limit, function_space |
+| `rformat_dir` | path, recursive, dry_run, indent, wrap, expand_if, brace_style, line_limit, function_space |
+| `rformat_file` | path, output, dry_run, indent, wrap, expand_if, brace_style, line_limit, function_space |
 
 
 ## Internal Functions (rformat:::)
@@ -32,8 +32,8 @@
 | `fix_else_placement` | code |
 | `format_blank_lines` | code |
 | `format_line_tokens` | tokens, prev_token, prev_prev_token |
-| `format_pipeline` | code, indent, wrap, expand_if, brace_style, line_limit |
-| `format_tokens` | code, indent, wrap, expand_if, brace_style, line_limit |
+| `format_pipeline` | code, indent, wrap, expand_if, brace_style, line_limit, function_space |
+| `format_tokens` | code, indent, wrap, expand_if, brace_style, line_limit, function_space |
 | `is_parseable_code` | code |
 | `needs_space` | prev, tok, prev_prev |
 | `reformat_function_defs` | code, wrap, brace_style, line_limit |
@@ -48,10 +48,11 @@
 | `wrap_one_long_operator` | code, indent, line_limit |
 
 
-## Options
+## Options (rformat)
 
-No options found in `rformat`.
-
+| Option | File | Type |
+|--------|------|------|
+| `avoids` | format_tokens.R | set |
 
 
 # Documentation: rformat
