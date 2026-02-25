@@ -9,7 +9,9 @@ format_tokens(
   wrap = "paren",
   expand_if = FALSE,
   brace_style = "kr",
-  line_limit = 80L
+  line_limit = 80L,
+  function_space = FALSE,
+  control_braces = FALSE
 )
 }
 \arguments{
@@ -26,6 +28,10 @@ parenthesis, `"fixed"` uses 8-space indent.}
 \item{brace_style}{Brace placement: `"kr"` (same line) or `"allman"` (new line).}
 
 \item{line_limit}{Maximum line length before wrapping (default 80).}
+
+\item{function_space}{If TRUE, add space before `(` in function definitions.}
+
+\item{control_braces}{If TRUE, add braces to bare one-line control flow bodies.}
 }
 \value{
 Formatted code as character string.

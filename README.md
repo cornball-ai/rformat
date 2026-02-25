@@ -47,11 +47,26 @@ rformat(code, expand_if = TRUE)
 
 # Space after function keyword: function (x) instead of function(x)
 rformat(code, function_space = TRUE)
+
+# Add braces to bare control flow bodies: if (x) y becomes if (x) { y }
+rformat(code, control_braces = TRUE)
+
+# Preserve } \n else instead of joining to } else {
+rformat(code, else_same_line = FALSE)
 ```
 
 ## Style
 
 Based on analysis of all 22 packages that ship with R (see `vignette("r-core-style")`). Where R Core is consistent, rformat follows: 4-space indentation, `function(` without a space (96% of source), paren-aligned continuation, arguments on same line. Where R Core is mixed, rformat makes opinionated choices: K&R braces (source is 53/47 K&R vs Allman) and spaces over tabs (source is 89/11).
+
+### Assignment
+
+`=` is converted to `<-` for top-level assignment. Named arguments (`foo(x = 1)`) are not changed. The R source code uses `<-` exclusively.
+
+### Indentation
+
+- 4 spaces per nesting level (configurable via `indent`)
+- Depth-based: braces, parens, and brackets all contribute
 
 ### Spacing
 
@@ -59,6 +74,26 @@ Based on analysis of all 22 packages that ship with R (see `vignette("r-core-sty
 - No space before `(` in `function(x, y)` or calls `foo(x)`
 - Space after commas: `c(1, 2, 3)`
 - Space after control flow: `if (`, `for (`, `while (`
+- No space around `::`, `$`, `@`, `:`
+- Trailing whitespace removed
+
+### Control Flow
+
+- Bare bodies are left alone by default (R Core is 59% bare). Use `control_braces = TRUE` to add braces.
+- `} else {` on same line (R Core is 70% same line). Use `else_same_line = FALSE` to preserve `}\nelse`.
+
+### Line Wrapping
+
+Long lines (>80 characters, configurable via `line_limit`) are wrapped:
+
+- At logical operators (`||`, `&&`) first
+- Then at commas in function calls
+- Short multi-line calls are collapsed back to one line when they fit
+
+### Blank Lines
+
+- Multiple consecutive blank lines collapsed to one
+- Blank lines after `{` removed
 
 ### Function Definitions
 

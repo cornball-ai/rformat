@@ -189,21 +189,31 @@ expect_equal(
   "foo(x = 1)\n"
 )
 
-# Braces on one-liner if
+# Default: bare one-liner control flow stays bare (control_braces = FALSE)
 expect_equal(
   rformat("if (x) y"),
-  "if (x) { y }\n"
+  "if (x) y\n"
 )
-
-# Braces on one-liner if-else
 expect_equal(
   rformat("if (x > 0) y else z"),
-  "if (x > 0) { y } else { z }\n"
+  "if (x > 0) y else z\n"
 )
-
-# Braces on one-liner for
 expect_equal(
   rformat("for (i in 1:10) print(i)"),
+  "for (i in 1:10) print(i)\n"
+)
+
+# control_braces = TRUE adds braces
+expect_equal(
+  rformat("if (x) y", control_braces = TRUE),
+  "if (x) { y }\n"
+)
+expect_equal(
+  rformat("if (x > 0) y else z", control_braces = TRUE),
+  "if (x > 0) { y } else { z }\n"
+)
+expect_equal(
+  rformat("for (i in 1:10) print(i)", control_braces = TRUE),
   "for (i in 1:10) { print(i) }\n"
 )
 
@@ -213,10 +223,24 @@ expect_equal(
   "x <- if (a) b else c\n"
 )
 
-# } else { on same line
+# } else { on same line (default else_same_line = TRUE)
 expect_equal(
   rformat("if (x) {\n  y\n}\nelse {\n  z\n}"),
   "if (x) {\n    y\n} else {\n    z\n}\n"
+)
+
+# else_same_line = FALSE preserves } \n else
+# Note: } \n else can't parse at top level in R, so code returns unchanged
+# when fix_else_placement is disabled
+expect_equal(
+  rformat("if (x) {\n  y\n}\nelse {\n  z\n}", else_same_line = FALSE),
+  "if (x) {\n  y\n}\nelse {\n  z\n}"
+)
+
+# else_same_line = FALSE inside braces (where } \n else does parse)
+expect_equal(
+  rformat("{\nif (x) {\n  y\n}\nelse {\n  z\n}\n}", else_same_line = FALSE),
+  "{\n    if (x) {\n        y\n    }\n    else {\n        z\n    }\n}\n"
 )
 
 # Trailing whitespace removal
@@ -245,7 +269,7 @@ expect_equal(
 
 # Multi-line condition with bare body (regression: add_control_braces corruption)
 code <- "if (!is.numeric(breaks) || !is.finite(breaks) || breaks < 1L) stop(\"invalid\")"
-result <- rformat(code)
+result <- rformat(code, control_braces = TRUE)
 expect_true(
   grepl("is.numeric\\(breaks\\)", result),
   info = "Multi-line condition should not lose content when adding braces"
@@ -285,9 +309,9 @@ expect_true(
   info = "Multiple body lines inside brace-in-paren should indent 1 level"
 )
 
-# Bare if body with trailing comment expands to multi-line (regression)
+# Bare if body with trailing comment expands to multi-line (with control_braces)
 code <- "if (x) y # comment"
-result <- rformat(code)
+result <- rformat(code, control_braces = TRUE)
 expect_true(
   grepl("\\{\n", result),
   info = "Bare body with trailing comment should expand to multi-line braces"
@@ -295,6 +319,12 @@ expect_true(
 expect_true(
   !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
   info = "Bare body with trailing comment should produce valid R code"
+)
+# Default: bare body with trailing comment stays bare
+result_bare <- rformat(code)
+expect_true(
+  grepl("if \\(x\\) y # comment", result_bare),
+  info = "Default: bare body with trailing comment stays bare"
 )
 
 # if-else expression inside function call stays unbraced (regression)

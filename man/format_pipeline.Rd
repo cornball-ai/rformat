@@ -3,7 +3,16 @@
 \alias{format_pipeline}
 \title{Apply Formatting Pipeline to a Code Fragment}
 \usage{
-format_pipeline(code, indent, wrap, expand_if, brace_style, line_limit)
+format_pipeline(
+  code,
+  indent,
+  wrap,
+  expand_if,
+  brace_style,
+  line_limit,
+  function_space = FALSE,
+  control_braces = FALSE
+)
 }
 \arguments{
 \item{code}{Character string of R code.}
@@ -17,6 +26,10 @@ format_pipeline(code, indent, wrap, expand_if, brace_style, line_limit)
 \item{brace_style}{Brace placement style.}
 
 \item{line_limit}{Maximum line length.}
+
+\item{function_space}{If TRUE, add space before `(` in function definitions.}
+
+\item{control_braces}{If TRUE, add braces to bare one-line control flow bodies.}
 }
 \value{
 Formatted code string.

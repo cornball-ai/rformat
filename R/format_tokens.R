@@ -16,12 +16,14 @@
 #' @param brace_style Brace placement: `"kr"` (same line) or `"allman"` (new line).
 #' @param line_limit Maximum line length before wrapping (default 80).
 #' @param function_space If TRUE, add space before `(` in function definitions.
+#' @param control_braces If TRUE, add braces to bare one-line control flow bodies.
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
 format_tokens <- function (code, indent = 4L, wrap = "paren",
                            expand_if = FALSE, brace_style = "kr",
-                           line_limit = 80L, function_space = FALSE) {
+                           line_limit = 80L, function_space = FALSE,
+                           control_braces = FALSE) {
     .fmt_opts$function_space <- function_space
     # Parse with source tracking
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
@@ -241,7 +243,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
         if (chunks[[i]]$is_expr) {
             parts[i] <- format_pipeline(chunks[[i]]$text, indent, wrap,
                                         expand_if, brace_style, line_limit,
-                                        function_space)
+                                        function_space, control_braces)
         } else {
             parts[i] <- chunks[[i]]$text
         }
@@ -859,16 +861,20 @@ split_toplevel <- function (code) {
 #' @param brace_style Brace placement style.
 #' @param line_limit Maximum line length.
 #' @param function_space If TRUE, add space before `(` in function definitions.
+#' @param control_braces If TRUE, add braces to bare one-line control flow bodies.
 #' @return Formatted code string.
 #' @keywords internal
 format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
-                             line_limit, function_space = FALSE) {
+                             line_limit, function_space = FALSE,
+                             control_braces = FALSE) {
     # Collapse multi-line calls that fit on one line
     code <- apply_if_parseable(code, collapse_calls)
 
     # Add braces to one-liner control flow (before wrapping, so bare
     # bodies move to their own lines before line-length decisions)
-    code <- apply_if_parseable(code, add_control_braces)
+    if (control_braces) {
+        code <- apply_if_parseable(code, add_control_braces)
+    }
 
     # Expand bare if-else arguments in overlong calls before wrapping,
     # so the braced form is stable and wrap passes see clean lines
@@ -886,7 +892,9 @@ format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
                                brace_style = brace_style,
                                line_limit = line_limit)
     # Function-def rewrites can expose bare one-line control flow.
-    code <- apply_if_parseable(code, add_control_braces)
+    if (control_braces) {
+        code <- apply_if_parseable(code, add_control_braces)
+    }
 
     # Reformat inline if-else to multi-line
     # Always expand long lines; optionally expand all
@@ -896,7 +904,9 @@ format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
             line_limit
         })
     # Inline-if expansion can expose new bare control flow
-    code <- apply_if_parseable(code, add_control_braces)
+    if (control_braces) {
+        code <- apply_if_parseable(code, add_control_braces)
+    }
 
     # Final expansion of bare if-else call args
     code <- apply_if_parseable(code, expand_call_if_args,

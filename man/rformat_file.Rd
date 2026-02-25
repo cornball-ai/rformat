@@ -11,7 +11,10 @@ rformat_file(
   wrap = "paren",
   expand_if = FALSE,
   brace_style = "kr",
-  line_limit = 80L
+  line_limit = 80L,
+  function_space = FALSE,
+  control_braces = FALSE,
+  else_same_line = TRUE
 )
 }
 \arguments{
@@ -33,6 +36,15 @@ character string for literal indent (e.g., `"\\t\\t"` for vintage R Core style).
 puts opening brace on same line as `) \{`, `"allman"` puts it on a new line.}
 
 \item{line_limit}{Maximum line length before wrapping (default 80).}
+
+\item{function_space}{If TRUE, add space before `(` in function definitions:
+`function (x)` instead of `function(x)`. Default FALSE matches 96\% of
+R Core source code.}
+
+\item{control_braces}{If TRUE, add braces to bare one-line control flow
+bodies. Default FALSE matches R Core majority style.}
+
+\item{else_same_line}{If TRUE (default), fix `\}\nelse` to `\} else \{`.}
 }
 \value{
 Invisibly returns formatted code.

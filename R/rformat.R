@@ -14,6 +14,11 @@
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.
+#' @param control_braces If TRUE, add braces to bare one-line control flow
+#'   bodies (e.g., `if (x) y` becomes `if (x) { y }`). Default FALSE
+#'   matches R Core source code where 59% of control flow bodies are bare.
+#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {` on
+#'   the same line. Matches R Core source code where 70% use same-line else.
 #' @return Formatted code as a character string.
 #' @export
 #' @examples
@@ -25,7 +30,8 @@
 #' rformat("f <- function(x) { x }", brace_style = "allman")
 rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
                      brace_style = "kr", line_limit = 80L,
-                     function_space = FALSE) {
+                     function_space = FALSE, control_braces = FALSE,
+                     else_same_line = TRUE) {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
@@ -34,7 +40,7 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
     # unconditionally can destabilize already-valid nested if/else layouts.
     parsed_ok <- !is.null(tryCatch(parse(text = code, keep.source = TRUE),
                                    error = function(e) NULL))
-    if (!parsed_ok) {
+    if (!parsed_ok && else_same_line) {
         code <- fix_else_placement(code)
     }
 
@@ -42,7 +48,8 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
                                expand_if = expand_if,
                                brace_style = brace_style,
                                line_limit = line_limit,
-                               function_space = function_space)
+                               function_space = function_space,
+                               control_braces = control_braces)
 
     format_blank_lines(formatted)
 }
@@ -65,6 +72,9 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.
+#' @param control_braces If TRUE, add braces to bare one-line control flow
+#'   bodies. Default FALSE matches R Core majority style.
+#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
 #' @return Invisibly returns formatted code.
 #' @export
 #' @examples
@@ -80,7 +90,8 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
                           wrap = "paren", expand_if = FALSE,
                           brace_style = "kr", line_limit = 80L,
-                          function_space = FALSE) {
+                          function_space = FALSE, control_braces = FALSE,
+                          else_same_line = TRUE) {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
@@ -89,7 +100,9 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
     formatted <- rformat(code, indent = indent, wrap = wrap,
                          expand_if = expand_if, brace_style = brace_style,
                          line_limit = line_limit,
-                         function_space = function_space)
+                         function_space = function_space,
+                         control_braces = control_braces,
+                         else_same_line = else_same_line)
 
     if (!dry_run) {
         if (is.null(output)) {
@@ -121,6 +134,9 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.
+#' @param control_braces If TRUE, add braces to bare one-line control flow
+#'   bodies. Default FALSE matches R Core majority style.
+#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
 #' @return Invisibly returns vector of modified file paths.
 #' @export
 #' @examples
@@ -136,7 +152,8 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
                          indent = 4L, wrap = "paren", expand_if = FALSE,
                          brace_style = "kr", line_limit = 80L,
-                         function_space = FALSE) {
+                         function_space = FALSE, control_braces = FALSE,
+                         else_same_line = TRUE) {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
     }
@@ -151,7 +168,9 @@ rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
         formatted <- rformat(original, indent = indent, wrap = wrap,
                              expand_if = expand_if, brace_style = brace_style,
                              line_limit = line_limit,
-                             function_space = function_space)
+                             function_space = function_space,
+                             control_braces = control_braces,
+                             else_same_line = else_same_line)
 
         if (formatted != original) {
             modified <- c(modified, f)

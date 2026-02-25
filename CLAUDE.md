@@ -37,8 +37,8 @@ This project formats R code following R Core style conventions, based on analysi
 
 ## Control Flow
 
-- Braces always, even for one-liners
-- `else` on same line as closing brace: `} else {`
+- Bare bodies left alone by default; `control_braces = TRUE` adds braces
+- `else` on same line as closing brace: `} else {` (default); `else_same_line = FALSE` to preserve
 - Inline if-else optionally expanded via `expand_if` parameter
 
 ```r

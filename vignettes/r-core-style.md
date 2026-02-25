@@ -92,6 +92,26 @@ Adding the 8 recommended packages barely shifts the percentages:
 
 The recommended packages follow the same conventions as base.
 
+### Control flow bodies
+
+| Style | Count | % |
+|-------|------:|--:|
+| Bare (no braces) | 24,839 | 58.7 |
+| Braced | 17,505 | 41.3 |
+
+R Core slightly prefers bare one-liner bodies. rformat leaves them bare by
+default (`control_braces = FALSE`). Use `control_braces = TRUE` to add braces.
+
+### `} else` placement
+
+| Style | Count | % |
+|-------|------:|--:|
+| `} else` (same line) | 4,576 | 69.7 |
+| `}\nelse` (new line) | 1,987 | 30.3 |
+
+Same-line `} else` is the majority practice. rformat enforces this by default
+(`else_same_line = TRUE`). Use `else_same_line = FALSE` to preserve `}\nelse`.
+
 ## Source examples
 
 Example from `stats/lm.R` — one of the minority that uses `function (`:
@@ -132,16 +152,17 @@ lm <- function (formula, data, subset, weights, na.action,$
    the first argument on a new line.
 6. **Closing `)` on same line as last argument** — no dangling paren style.
 
-## R Developer Guide recommendation
+## External references
+
+The [R Internals manual, Chapter 9: R coding standards](https://cran.r-project.org/doc/manuals/r-release/R-ints.html#R-coding-standards)
+recommends 4-space indentation for R and C code.
 
 The [R Dev Guide PR #256](https://github.com/r-devel/rdevguide/pull/256)
-recommends these EditorConfig settings:
+codifies this as an EditorConfig setting (4-space indent, 8-column tab
+display width, spaces not tabs).
 
-- **Indent size:** 4 spaces
-- **Tab width:** 8 (for display)
-- **Use spaces, not tabs**
-
-This codifies the majority practice. The tab-indented code is historical.
+The R source code uses `<-` exclusively for assignment — `=` does not appear
+as an assignment operator in any base or recommended package.
 
 ## rformat defaults
 
@@ -150,6 +171,9 @@ choices where R Core is mixed:
 
 | Convention | R Core source | rformat default | Option to change |
 |------------|---------------|-----------------|------------------|
+| Assignment | 100% `<-` | `<-` | — |
+| Control flow braces | 59% bare, 41% braced | bare | `control_braces = TRUE` |
+| `} else` placement | 70% same line | same line | `else_same_line = FALSE` |
 | Brace style | ~53% K&R, ~47% Allman | K&R | `brace_style = "allman"` |
 | `function` spacing | 96% no space | no space | `function_space = TRUE` |
 | Indentation | 89% spaces, 11% tabs | 4 spaces | `indent = "\t"` |
