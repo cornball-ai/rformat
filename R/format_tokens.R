@@ -241,9 +241,10 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     parts <- character(length(chunks))
     for (i in seq_along(chunks)) {
         if (chunks[[i]]$is_expr) {
-            parts[i] <- format_pipeline(chunks[[i]]$text, indent, wrap,
-                                        expand_if, brace_style, line_limit,
-                                        function_space, control_braces)
+            parts[i] <- format_pipeline_ast(chunks[[i]]$text, indent, wrap,
+                                            expand_if, brace_style,
+                                            line_limit, function_space,
+                                            control_braces)
         } else {
             parts[i] <- chunks[[i]]$text
         }

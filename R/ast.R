@@ -528,6 +528,13 @@ collapse_calls_ast <- function (terms, indent_str, line_limit = 80L) {
                 terms$out_line[suffix_idx] <- open_line
             }
 
+            # Shift later lines up by the number of freed lines
+            lines_freed <- close_line - open_line
+            if (lines_freed > 0L) {
+                later <- terms$out_line > close_line
+                terms$out_line[later] <- terms$out_line[later] - lines_freed
+            }
+
             # Re-sort and reassign out_order
             terms <- terms[order(terms$out_line, terms$out_order), ]
             terms$out_order <- seq_len(nrow(terms))
@@ -841,73 +848,79 @@ wrap_long_calls_ast <- function (terms, indent_str, wrap = "paren",
                 prev <- tok
             }
 
-            # Now greedily pack args onto lines
-            current_w <- first_line_w
-            current_line <- call_line
-            lines_inserted <- 0L
+            # Two-pass approach: compute line offsets, then apply
 
+            # Pass 1: compute arg_widths and line offsets
+            arg_widths <- integer(length(arg_groups))
             for (ai in seq_along(arg_groups)) {
-                # Measure this arg's width
                 arg_idx <- arg_groups[[ai]]
-                arg_w <- 0L
+                aw <- 0L
                 aprev <- NULL
                 aprev_prev <- NULL
                 for (aidx in arg_idx) {
                     atok <- terms[aidx, ]
                     if (!is.null(aprev) &&
                         needs_space(aprev, atok, aprev_prev)) {
-                        arg_w <- arg_w + 1L
+                        aw <- aw + 1L
                     }
-                    arg_w <- arg_w + nchar(atok$out_text)
+                    aw <- aw + nchar(atok$out_text)
                     aprev_prev <- aprev
                     aprev <- atok
                 }
-                # Add comma+space (except last arg) or ")" (last arg)
-                if (ai < length(arg_groups)) {
-                    extra <- 2L  # ", "
-                } else {
-                    extra <- 1L  # ")"
-                }
+                arg_widths[ai] <- aw
+            }
 
-                # Would it fit on current line?
-                # Need space before first token of arg
-                space_w <- 0L
-                if (current_w > 0L) {
-                    space_w <- 1L  # space after comma or after (
-                }
-                test_w <- current_w + space_w + arg_w + extra
+            current_w <- first_line_w
+            lines_inserted <- 0L
+            first_on_line <- TRUE
+            arg_line_offset <- integer(length(arg_groups))
 
-                if (test_w > line_limit && current_w > cont_width) {
-                    # Wrap: move this arg to a new line
-                    new_ln <- current_line + lines_inserted + 1L
+            for (ai in seq_along(arg_groups)) {
+                aw <- arg_widths[ai]
+                extra <- if (ai < length(arg_groups)) 2L else 1L
+                space_w <- if (!first_on_line) 1L else 0L
+                test_w <- current_w + space_w + aw + extra
+
+                if (test_w > line_limit && !first_on_line) {
                     lines_inserted <- lines_inserted + 1L
-
-                    # Shift later lines
-                    later <- terms$out_line >= new_ln &
-                        !(seq_len(nrow(terms)) %in% arg_idx)
-                    terms$out_line[later] <- terms$out_line[later] + 1L
-
-                    # Move arg tokens to new line
-                    terms$out_line[arg_idx] <- new_ln
-
-                    current_w <- cont_width + arg_w + extra
-                    current_line <- new_ln
+                    arg_line_offset[ai] <- lines_inserted
+                    current_w <- cont_width + aw + extra
+                    first_on_line <- FALSE
                 } else {
+                    arg_line_offset[ai] <- lines_inserted
                     current_w <- test_w
+                    first_on_line <- FALSE
                 }
             }
 
-            # Move closing ) to same line as last arg
-            last_arg_idx <- arg_groups[[length(arg_groups)]]
-            terms$out_line[close_idx] <-
-                terms$out_line[last_arg_idx[length(last_arg_idx)]]
+            if (lines_inserted == 0L) next
 
-            if (lines_inserted > 0L) {
-                terms <- terms[order(terms$out_line, terms$out_order), ]
-                terms$out_order <- seq_len(nrow(terms))
-                changed <- TRUE
-                break
+            # Pass 2: apply line assignments
+            # Collect all call-internal token indices
+            all_call_idx <- c(unlist(arg_groups), comma_indices, close_idx)
+
+            # Shift everything after call_line down by lines_inserted
+            later <- terms$out_line > call_line &
+                !(seq_len(nrow(terms)) %in% all_call_idx)
+            terms$out_line[later] <- terms$out_line[later] + lines_inserted
+
+            # Place args and commas
+            for (ai in seq_along(arg_groups)) {
+                target <- call_line + arg_line_offset[ai]
+                terms$out_line[arg_groups[[ai]]] <- target
+                if (ai < length(arg_groups)) {
+                    terms$out_line[comma_indices[ai]] <- target
+                }
             }
+
+            # Place ) on same line as last arg
+            last_offset <- arg_line_offset[length(arg_groups)]
+            terms$out_line[close_idx] <- call_line + last_offset
+
+            terms <- terms[order(terms$out_line, terms$out_order), ]
+            terms$out_order <- seq_len(nrow(terms))
+            changed <- TRUE
+            break
         }
     }
 
@@ -1057,6 +1070,11 @@ reformat_function_defs_ast <- function (terms, indent_str = "    ",
                 arg_widths[ai] <- aw
             }
 
+            # Comments inside formals prevent single-line collapse
+            formal_range <- seq(open_idx + 1L, close_idx - 1L)
+            has_comment <- any(terms$token[formal_range] == "COMMENT")
+            if (has_comment) next
+
             # Single-line width: prefix + function( + arg1, arg2, ..., argN)
             single_w <- open_col +
                 sum(arg_widths) +
@@ -1200,4 +1218,80 @@ reformat_function_defs_ast <- function (terms, indent_str = "    ",
     }
 
     terms
+}
+
+#' AST-Based Format Pipeline
+#'
+#' Single-pass pipeline: parse once, enrich the terminal DataFrame, run
+#' all transforms as DataFrame operations, serialize to text once. Replaces
+#' the text-based `format_pipeline()` which re-parsed between every pass.
+#'
+#' Transforms not yet ported to AST (control_braces, expand_call_if_args,
+#' reformat_inline_if) still run as text-based post-passes. These will be
+#' ported in future commits.
+#'
+#' @param code Code string for one top-level expression.
+#' @param indent Indent string or integer.
+#' @param wrap Continuation style: `"paren"` or `"fixed"`.
+#' @param expand_if Whether to expand all inline if-else.
+#' @param brace_style `"kr"` or `"allman"`.
+#' @param line_limit Maximum line length.
+#' @param function_space Add space after `function`.
+#' @param control_braces Control brace mode.
+#' @return Formatted code string.
+#' @keywords internal
+format_pipeline_ast <- function (code, indent, wrap, expand_if, brace_style,
+                                 line_limit, function_space = FALSE,
+                                 control_braces = FALSE) {
+    indent_str <- if (is.numeric(indent)) strrep(" ", indent) else indent
+
+    # Parse once
+    pd <- tryCatch(getParseData(parse(text = code, keep.source = TRUE)),
+                   error = function(e) NULL)
+    if (is.null(pd) || nrow(pd) == 0L) return(code)
+
+    orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
+    terms <- enrich_terminals(pd, orig_lines)
+
+    # --- AST transforms (single DataFrame, no re-parsing) ---
+
+    terms <- collapse_calls_ast(terms, indent_str, line_limit)
+    terms <- wrap_long_operators_ast(terms, indent_str, line_limit)
+    terms <- wrap_long_calls_ast(terms, indent_str, wrap, line_limit)
+    terms <- reformat_function_defs_ast(terms, indent_str,
+        wrap = wrap, brace_style = brace_style,
+        line_limit = line_limit, function_space = function_space)
+    terms <- wrap_long_operators_ast(terms, indent_str, line_limit)
+    terms <- wrap_long_calls_ast(terms, indent_str, wrap, line_limit)
+    terms <- wrap_long_operators_ast(terms, indent_str, line_limit)
+
+    code <- serialize_tokens(terms, indent_str, wrap, line_limit)
+
+    # --- Text-based transforms (to be ported to AST) ---
+
+    if (!isFALSE(control_braces)) {
+        code <- apply_if_parseable(code, add_control_braces)
+    }
+
+    code <- apply_if_parseable(code, expand_call_if_args,
+                               line_limit = line_limit)
+
+    code <- apply_if_parseable(code, reformat_inline_if,
+        line_limit = if (expand_if) 0L else line_limit)
+
+    if (!isFALSE(control_braces)) {
+        code <- apply_if_parseable(code, add_control_braces)
+    }
+
+    code <- apply_if_parseable(code, expand_call_if_args,
+                               line_limit = line_limit)
+
+    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
+                               line_limit = line_limit)
+    code <- apply_if_parseable(code, wrap_long_calls, wrap = wrap,
+                               indent = indent, line_limit = line_limit)
+    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
+                               line_limit = line_limit)
+
+    code
 }
