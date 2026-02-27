@@ -158,12 +158,12 @@ Structural rewrites (collapsing calls, adding braces, wrapping long lines, refor
 
 ### Stress Testing
 
-The [stress test suite](https://github.com/cornball-ai/rformat-lab) formats every `.R` file from 100 CRAN source tarballs, checking:
+The [stress test suite](https://github.com/cornball-ai/rformat-lab) formats every `.R` file from 126 CRAN and base R source tarballs, checking:
 
 - **Parse gate**: formatted code must parse without errors
 - **Idempotency**: formatting twice produces identical output
 
-Tested against 100 popular CRAN packages spanning data manipulation (dplyr, data.table), visualization (ggplot2, plotly), modeling (caret, xgboost, brms), infrastructure (Rcpp, rlang, vctrs), web (shiny, plumber), and more.
+Current results with default options: 0 failures, 2 idempotency exceptions (methods/trace.R and stats/nls.R). Both involve function signatures with complex default values containing inline if-else expressions, where the function definition rewriter flattens defaults to one line but subsequent wrap passes re-wrap them differently. This only affects default values in function signatures — all other formatting is stable. An AST-based rewrite on the [`ast`](https://github.com/cornball-ai/rformat/tree/ast) branch is expected to resolve this by unifying signature rewriting with line-wrapping in a single pass.
 
 ## Philosophy
 
