@@ -163,7 +163,7 @@ The [stress test suite](https://github.com/cornball-ai/rformat-lab) formats ever
 - **Parse gate**: formatted code must parse without errors
 - **Idempotency**: formatting twice produces identical output
 
-Current results with default options: 0 failures, 2 idempotency exceptions (methods/trace.R and stats/nls.R). Both involve function signatures with complex default values containing inline if-else expressions, where the function definition rewriter flattens defaults to one line but subsequent wrap passes re-wrap them differently. This only affects default values in function signatures — all other formatting is stable. An AST-based rewrite on the [`ast`](https://github.com/cornball-ai/rformat/tree/ast) branch is expected to resolve this by unifying signature rewriting with line-wrapping in a single pass.
+Current results with default `rformat()` options: 0 failures, 2 idempotency exceptions (methods/trace.R and stats/nls.R). Both involve function signatures with complex default values containing inline if-else expressions, where the function definition rewriter flattens defaults to one line but subsequent wrap passes re-wrap them differently. This only affects default values in function signatures — all other formatting is stable. Non-default options (e.g., `control_braces`, non-standard `indent`) may have additional idempotency issues. An AST-based rewrite on the [`ast`](https://github.com/cornball-ai/rformat/tree/ast) branch is expected to resolve these by unifying signature rewriting with line-wrapping in a single pass.
 
 ## Philosophy
 
