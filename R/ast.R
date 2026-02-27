@@ -498,79 +498,13 @@ collapse_calls_ast <- function (terms, indent_str, line_limit = 80L) {
             if (any(inner$token == "COMMENT")) next
             if (any(inner$token %in% c("'{'", "'}'"))) next
 
-            # Compute collapsed width: prefix + call tokens + suffix
+            # Collapse: move all call tokens + suffix tokens to open_line
             call_range <- seq(ci, close_idx)
-            call_toks <- terms[call_range, ]
+            terms$out_line[call_range] <- open_line
 
-            # Prefix: all tokens on the opening line before the call
-            prefix_idx <- which(terms$out_line == open_line &
-                terms$out_order < terms$out_order[ci])
-            prefix_width <- 0L
-            if (length(prefix_idx) > 0L) {
-                # Indent + prefix tokens
-                first_level <- token_indent_level(terms, prefix_idx[1])
-                prefix_width <- nchar(indent_str) * first_level
-                prev <- NULL
-                prev_prev <- NULL
-                for (pi in prefix_idx) {
-                    ptok <- terms[pi, ]
-                    if (!is.null(prev) && needs_space(prev, ptok, prev_prev)) {
-                        prefix_width <- prefix_width + 1L
-                    }
-                    prefix_width <- prefix_width + nchar(ptok$out_text)
-                    prev_prev <- prev
-                    prev <- ptok
-                }
-                # Space between prefix and call
-                if (!is.null(prev) && needs_space(prev, call_toks[1, ])) {
-                    prefix_width <- prefix_width + 1L
-                }
-            } else {
-                first_level <- token_indent_level(terms, call_range[1])
-                prefix_width <- nchar(indent_str) * first_level
-            }
-
-            # Call tokens width
-            call_width <- 0L
-            prev <- NULL
-            prev_prev <- NULL
-            for (j in seq_len(nrow(call_toks))) {
-                tok <- call_toks[j, ]
-                if (!is.null(prev) && needs_space(prev, tok, prev_prev)) {
-                    call_width <- call_width + 1L
-                }
-                call_width <- call_width + nchar(tok$out_text)
-                prev_prev <- prev
-                prev <- tok
-            }
-
-            # Suffix: tokens after ) on the closing line
+            # Also move suffix tokens (after ) on close line) to open_line
             suffix_idx <- which(terms$out_line == close_line &
                 terms$out_order > terms$out_order[close_idx])
-            suffix_width <- 0L
-            if (length(suffix_idx) > 0L) {
-                sprev <- call_toks[nrow(call_toks), ]
-                sprev_prev <- if (nrow(call_toks) >= 2L) {
-                    call_toks[nrow(call_toks) - 1L, ]
-                } else {
-                    NULL
-                }
-                for (si in suffix_idx) {
-                    stok <- terms[si, ]
-                    if (needs_space(sprev, stok, sprev_prev)) {
-                        suffix_width <- suffix_width + 1L
-                    }
-                    suffix_width <- suffix_width + nchar(stok$out_text)
-                    sprev_prev <- sprev
-                    sprev <- stok
-                }
-            }
-
-            total_width <- prefix_width + call_width + suffix_width
-            if (total_width > line_limit) next
-
-            # Collapse: move all call tokens + suffix tokens to open_line
-            terms$out_line[call_range] <- open_line
             if (length(suffix_idx) > 0L) {
                 terms$out_line[suffix_idx] <- open_line
             }
@@ -600,5 +534,363 @@ renumber_lines <- function (terms) {
     old_lines <- unique(terms$out_line)
     mapping <- setNames(seq_along(old_lines), as.character(old_lines))
     terms$out_line <- as.integer(mapping[as.character(terms$out_line)])
+    terms
+}
+
+#' Wrap Long Lines at Operators (AST Version)
+#'
+#' Finds overlong lines and breaks them after logical operators (`||`, `&&`,
+#' `|`, `&`). Continuation lines get depth-based indentation.
+#'
+#' @param terms Enriched terminal DataFrame.
+#' @param indent_str Indent string.
+#' @param line_limit Maximum line length.
+#' @return Updated DataFrame.
+#' @keywords internal
+wrap_long_operators_ast <- function (terms, indent_str, line_limit = 80L) {
+    break_ops <- c("OR2", "AND2", "OR", "AND")
+    changed <- TRUE
+    max_iter <- 100L
+
+    while (changed && max_iter > 0L) {
+        max_iter <- max_iter - 1L
+        changed <- FALSE
+
+        terms <- terms[order(terms$out_line, terms$out_order), ]
+        out_lines <- unique(terms$out_line)
+
+        for (ln in out_lines) {
+            width <- ast_line_width(terms, ln, indent_str)
+            if (width <= line_limit) next
+
+            idx <- which(terms$out_line == ln)
+            line_toks <- terms[idx, ]
+
+            # Skip semicolons
+            if (any(line_toks$token == "';'")) next
+
+            # Find paren depth at start of line
+            start_paren <- if (nrow(line_toks) > 0L) {
+                line_toks$paren_depth[1]
+            } else {
+                0L
+            }
+
+            # Find best break operator (last one within limit at depth <= start+1)
+            best_break <- NULL
+            pos <- nchar(indent_str) * token_indent_level(terms, idx[1])
+            prev <- NULL
+            prev_prev <- NULL
+            cur_paren <- start_paren
+            for (j in seq_len(nrow(line_toks))) {
+                tok <- line_toks[j, ]
+                if (!is.null(prev) && needs_space(prev, tok, prev_prev)) {
+                    pos <- pos + 1L
+                }
+                if (tok$token %in% c("'('", "'['")) {
+                    cur_paren <- cur_paren + 1L
+                } else if (tok$token == "LBB") {
+                    cur_paren <- cur_paren + 2L
+                } else if (tok$token %in% c("')'", "']'")) {
+                    cur_paren <- cur_paren - 1L
+                } else if (tok$token == "']]'") {
+                    cur_paren <- cur_paren - 2L
+                }
+                end_pos <- pos + nchar(tok$out_text)
+                if (tok$token %in% break_ops &&
+                    cur_paren <= start_paren + 1L &&
+                    end_pos <= line_limit) {
+                    best_break <- j
+                }
+                pos <- end_pos
+                prev_prev <- prev
+                prev <- tok
+            }
+
+            if (is.null(best_break)) next
+
+            # Split: tokens after the break go to a new line
+            break_at <- best_break
+            cont_level <- line_toks$nesting_level[break_at]
+            # For the continuation, use the nesting level at the break point
+            new_line <- ln + 1L
+
+            # Shift all later lines up by 1
+            later <- terms$out_line > ln
+            terms$out_line[later] <- terms$out_line[later] + 1L
+
+            # Move tokens after break to new line
+            move_idx <- idx[(break_at + 1L):length(idx)]
+            terms$out_line[move_idx] <- new_line
+
+            # Re-sort and fix order
+            terms <- terms[order(terms$out_line, terms$out_order), ]
+            terms$out_order <- seq_len(nrow(terms))
+            changed <- TRUE
+            break
+        }
+    }
+
+    terms
+}
+
+#' Wrap Long Function Calls at Commas (AST Version)
+#'
+#' Finds single-line function calls on overlong lines and wraps them at
+#' commas. Continuation lines get depth-based indentation (or paren-aligned
+#' if `wrap = "paren"`).
+#'
+#' @param terms Enriched terminal DataFrame.
+#' @param indent_str Indent string.
+#' @param wrap Continuation style: `"paren"` or `"fixed"`.
+#' @param line_limit Maximum line length.
+#' @return Updated DataFrame.
+#' @keywords internal
+wrap_long_calls_ast <- function (terms, indent_str, wrap = "paren",
+                                 line_limit = 80L) {
+    changed <- TRUE
+    max_iter <- 100L
+
+    while (changed && max_iter > 0L) {
+        max_iter <- max_iter - 1L
+        changed <- FALSE
+
+        terms <- terms[order(terms$out_line, terms$out_order), ]
+        call_idx <- which(terms$token == "SYMBOL_FUNCTION_CALL")
+
+        for (ci in call_idx) {
+            open_idx <- ci + 1L
+            if (open_idx > nrow(terms)) next
+            if (terms$token[open_idx] != "'('") next
+
+            call_line <- terms$out_line[ci]
+
+            # Only overlong lines
+            if (ast_line_width(terms, call_line, indent_str) <= line_limit) next
+
+            # Only single-line calls
+            depth <- 1L
+            close_idx <- open_idx + 1L
+            while (close_idx <= nrow(terms) && depth > 0L) {
+                if (terms$token[close_idx] == "'('") depth <- depth + 1L
+                else if (terms$token[close_idx] == "')'") depth <- depth - 1L
+                if (depth > 0L) close_idx <- close_idx + 1L
+            }
+            if (close_idx > nrow(terms)) next
+            if (terms$out_line[close_idx] != call_line) next
+
+            # Skip calls with braces
+            inner <- terms[seq(open_idx, close_idx), ]
+            if (any(inner$token %in% c("'{'", "'}'"))) next
+
+            # Skip semicolons on this line
+            line_idx <- which(terms$out_line == call_line)
+            line_toks <- terms[line_idx, ]
+            if (any(line_toks$token == "';'")) next
+
+            # Skip inner calls when outer call is wrappable
+            func_order <- terms$out_order[ci]
+            before <- line_toks[line_toks$out_order < func_order, ]
+            pd_before <- sum(before$token == "'('") -
+                sum(before$token == "')'")
+            if (pd_before > 0L) {
+                # Check if an outer call on this line has unwrapped commas
+                outer_calls <- which(line_toks$token == "SYMBOL_FUNCTION_CALL" &
+                    line_toks$out_order < func_order)
+                skip <- FALSE
+                for (oc in outer_calls) {
+                    oc_row <- which(terms$out_order == line_toks$out_order[oc] &
+                        terms$out_line == call_line)
+                    if (length(oc_row) == 0L) next
+                    oc_open <- oc_row + 1L
+                    if (oc_open > nrow(terms)) next
+                    if (terms$token[oc_open] != "'('") next
+                    # Find matching )
+                    od <- 1L
+                    oc_close <- oc_open + 1L
+                    while (oc_close <= nrow(terms) && od > 0L) {
+                        if (terms$token[oc_close] == "'('") od <- od + 1L
+                        if (terms$token[oc_close] == "')'") od <- od - 1L
+                        if (od > 0L) oc_close <- oc_close + 1L
+                    }
+                    if (oc_close > nrow(terms)) next
+                    if (terms$out_line[oc_close] != call_line) next
+                    # Check for comma at depth 1
+                    d2 <- 0L
+                    for (ki in seq(oc_open + 1L, oc_close - 1L)) {
+                        tt <- terms$token[ki]
+                        if (tt == "'('") d2 <- d2 + 1L
+                        if (tt == "')'") d2 <- d2 - 1L
+                        if (tt == "','" && d2 == 0L) { skip <- TRUE; break }
+                    }
+                    if (skip) break
+                }
+                if (skip) next
+            }
+
+            # Need at least one depth-0 comma
+            has_comma <- FALSE
+            d2 <- 0L
+            for (k in seq(open_idx + 1L, close_idx - 1L)) {
+                tt <- terms$token[k]
+                if (tt %in% c("'('", "'['")) d2 <- d2 + 1L
+                if (tt == "LBB") d2 <- d2 + 2L
+                if (tt %in% c("')'", "']'")) d2 <- d2 - 1L
+                if (tt == "']]'") d2 <- d2 - 2L
+                if (tt == "','" && d2 == 0L) { has_comma <- TRUE; break }
+            }
+            if (!has_comma) next
+
+            # Collect argument groups (ranges of indices between depth-0 commas)
+            arg_groups <- list()
+            comma_indices <- integer(0)
+            current_start <- open_idx + 1L
+            d2 <- 0L
+            for (k in seq(open_idx + 1L, close_idx - 1L)) {
+                tt <- terms$token[k]
+                if (tt %in% c("'('", "'['")) d2 <- d2 + 1L
+                if (tt == "LBB") d2 <- d2 + 2L
+                if (tt %in% c("')'", "']'")) d2 <- d2 - 1L
+                if (tt == "']]'") d2 <- d2 - 2L
+                if (tt == "','" && d2 == 0L) {
+                    if (current_start <= k - 1L) {
+                        arg_groups[[length(arg_groups) + 1L]] <-
+                            seq(current_start, k - 1L)
+                    }
+                    comma_indices <- c(comma_indices, k)
+                    current_start <- k + 1L
+                }
+            }
+            # Last arg
+            if (current_start <= close_idx - 1L) {
+                arg_groups[[length(arg_groups) + 1L]] <-
+                    seq(current_start, close_idx - 1L)
+            }
+            if (length(arg_groups) < 2L) next
+
+            # Compute continuation indent
+            indent_size <- nchar(indent_str)
+            cont_level <- terms$nesting_level[open_idx] + 1L
+            cont_width <- cont_level * indent_size
+
+            if (wrap == "paren") {
+                # Compute paren column = prefix width + func_name + "("
+                prefix_idx <- which(terms$out_line == call_line &
+                    terms$out_order < terms$out_order[ci])
+                prefix_w <- nchar(indent_str) *
+                    token_indent_level(terms, line_idx[1])
+                prev <- NULL
+                prev_prev <- NULL
+                for (pi in prefix_idx) {
+                    ptok <- terms[pi, ]
+                    if (!is.null(prev) &&
+                        needs_space(prev, ptok, prev_prev)) {
+                        prefix_w <- prefix_w + 1L
+                    }
+                    prefix_w <- prefix_w + nchar(ptok$out_text)
+                    prev_prev <- prev
+                    prev <- ptok
+                }
+                # Add func name + (
+                if (!is.null(prev) &&
+                    needs_space(prev, terms[ci, ], prev_prev)) {
+                    prefix_w <- prefix_w + 1L
+                }
+                paren_col <- prefix_w + nchar(terms$out_text[ci]) + 1L
+                if (paren_col <= line_limit %/% 2L) {
+                    cont_width <- paren_col
+                }
+            }
+
+            # Greedy packing: put args on lines until they exceed limit
+            # First line: prefix + func( + first args
+            # Measure first-line width up to "("
+            first_line_w <- 0L
+            prev <- NULL
+            prev_prev <- NULL
+            for (fi in line_idx[line_idx <= open_idx]) {
+                tok <- terms[fi, ]
+                if (fi == line_idx[1]) {
+                    first_line_w <- nchar(indent_str) *
+                        token_indent_level(terms, fi)
+                }
+                if (!is.null(prev) && needs_space(prev, tok, prev_prev)) {
+                    first_line_w <- first_line_w + 1L
+                }
+                first_line_w <- first_line_w + nchar(tok$out_text)
+                prev_prev <- prev
+                prev <- tok
+            }
+
+            # Now greedily pack args onto lines
+            current_w <- first_line_w
+            current_line <- call_line
+            lines_inserted <- 0L
+
+            for (ai in seq_along(arg_groups)) {
+                # Measure this arg's width
+                arg_idx <- arg_groups[[ai]]
+                arg_w <- 0L
+                aprev <- NULL
+                aprev_prev <- NULL
+                for (aidx in arg_idx) {
+                    atok <- terms[aidx, ]
+                    if (!is.null(aprev) &&
+                        needs_space(aprev, atok, aprev_prev)) {
+                        arg_w <- arg_w + 1L
+                    }
+                    arg_w <- arg_w + nchar(atok$out_text)
+                    aprev_prev <- aprev
+                    aprev <- atok
+                }
+                # Add comma+space (except last arg) or ")" (last arg)
+                if (ai < length(arg_groups)) {
+                    extra <- 2L  # ", "
+                } else {
+                    extra <- 1L  # ")"
+                }
+
+                # Would it fit on current line?
+                # Need space before first token of arg
+                space_w <- 0L
+                if (current_w > 0L) {
+                    space_w <- 1L  # space after comma or after (
+                }
+                test_w <- current_w + space_w + arg_w + extra
+
+                if (test_w > line_limit && current_w > cont_width) {
+                    # Wrap: move this arg to a new line
+                    new_ln <- current_line + lines_inserted + 1L
+                    lines_inserted <- lines_inserted + 1L
+
+                    # Shift later lines
+                    later <- terms$out_line >= new_ln &
+                        !(seq_len(nrow(terms)) %in% arg_idx)
+                    terms$out_line[later] <- terms$out_line[later] + 1L
+
+                    # Move arg tokens to new line
+                    terms$out_line[arg_idx] <- new_ln
+
+                    current_w <- cont_width + arg_w + extra
+                    current_line <- new_ln
+                } else {
+                    current_w <- test_w
+                }
+            }
+
+            # Move closing ) to same line as last arg
+            last_arg_idx <- arg_groups[[length(arg_groups)]]
+            terms$out_line[close_idx] <-
+                terms$out_line[last_arg_idx[length(last_arg_idx)]]
+
+            if (lines_inserted > 0L) {
+                terms <- terms[order(terms$out_line, terms$out_order), ]
+                terms$out_order <- seq_len(nrow(terms))
+                changed <- TRUE
+                break
+            }
+        }
+    }
+
     terms
 }
