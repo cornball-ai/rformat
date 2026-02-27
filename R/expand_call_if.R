@@ -59,7 +59,7 @@ expand_one_call_if_arg <- function (code, line_limit = 80L) {
     for (ii in if_indices) {
         if_line <- terminals$line1[ii]
         if (if_line > length(lines)) { next }
-        if (display_width(lines[if_line]) <= line_limit) { next }
+        if (code_width(lines[if_line]) <= line_limit) { next }
 
         # Track full nesting state before the IF token to match
         # format_tokens indentation logic

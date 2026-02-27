@@ -1,5 +1,6 @@
 reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
-                                    line_limit = 80L) {
+                                    line_limit = 80L,
+                                    function_space = FALSE) {
     # Process one function at a time, re-parsing each time
     # to handle line number changes
     changed <- TRUE
@@ -11,7 +12,8 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
 
         result <- reformat_one_function(code, wrap = wrap,
                                         brace_style = brace_style,
-                                        line_limit = line_limit)
+                                        line_limit = line_limit,
+                                        function_space = function_space)
         if (!is.null(result)) {
             code <- result
             changed <- TRUE
@@ -34,7 +36,8 @@ reformat_function_defs <- function (code, wrap = "paren", brace_style = "kr",
 #' @return Modified code or NULL if no changes.
 #' @keywords internal
 reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
-                                   line_limit = 80L) {
+                                   line_limit = 80L,
+                                   function_space = FALSE) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
                        error = function(e) NULL)
 
@@ -120,6 +123,8 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
             prefix <- ""
         }
 
+        func_open <- if (function_space) "function (" else "function("
+
         # Collect all formals with their defaults
         formal_texts <- character(0)
         i <- next_idx + 1
@@ -178,7 +183,7 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
         }
 
         # Build single-line signature: prefix + function (arg1, arg2, ...)
-        single_line_sig <- paste0(prefix, "function (",
+        single_line_sig <- paste0(prefix, func_open,
                                   paste(formal_texts, collapse = ", "), ")")
 
         # Account for " {" suffix when using K&R brace style
@@ -198,10 +203,10 @@ reformat_one_function <- function (code, wrap = "paren", brace_style = "kr",
                 cont_indent <- strrep(" ", 8L)
             } else {
                 # Align to opening paren
-                cont_indent <- strrep(" ", nchar(prefix) + nchar("function ("))
+                cont_indent <- strrep(" ", nchar(prefix) + nchar(func_open))
             }
             new_lines <- character(0)
-            current_line <- paste0(prefix, "function (")
+            current_line <- paste0(prefix, func_open)
 
             for (j in seq_along(formal_texts)) {
                 arg_with_comma <- if (j < length(formal_texts)) {

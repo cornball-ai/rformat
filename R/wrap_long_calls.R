@@ -70,7 +70,7 @@ wrap_one_long_call <- function (code, wrap = "paren", indent = 4L,
         call_line <- terminals$line1[ci]
 
         # Only consider single-line calls on lines that are too long
-        if (display_width(lines[call_line]) <= line_limit) { next }
+        if (code_width(lines[call_line]) <= line_limit) { next }
 
         # Skip lines with semicolons (multiple statements on one line)
         line_toks <- terminals[terminals$line1 == call_line,]
@@ -372,7 +372,7 @@ wrap_one_long_operator <- function (code, indent = 4L, line_limit = 80L) {
     break_ops <- c("OR2", "AND2", "OR", "AND")
 
     for (line_num in seq_along(lines)) {
-        if (display_width(lines[line_num]) <= line_limit) { next }
+        if (code_width(lines[line_num]) <= line_limit) { next }
 
         line_toks <- terminals[terminals$line1 == line_num,]
         if (nrow(line_toks) == 0) { next }

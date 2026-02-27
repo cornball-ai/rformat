@@ -179,7 +179,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
             line_prefix <- depth_prefix
         }
 
-        out_lines[line_num] <- paste0(line_prefix, formatted)
+        out_lines[line_num] <- trimws(paste0(line_prefix, formatted), "right")
 
         # Update output call-paren stack using this line's tokens.
         # Compute each token's output column from the formatted line.
@@ -723,6 +723,14 @@ col_to_charpos <- function (line, col) {
 #' @param line A single line of text.
 #' @return Display width of the line.
 #' @keywords internal
+code_width <- function (line) {
+    # Width of the code portion only (excluding trailing comment).
+    # Used by wrap passes: don't wrap code just because a trailing
+    # comment pushes the line past the limit.
+    code_part <- sub("\\s*#.*$", "", line)
+    display_width(code_part)
+}
+
 display_width <- function (line) {
     if (!grepl("\t", line, fixed = TRUE)) {
         return(nchar(line))
@@ -819,9 +827,24 @@ split_toplevel <- function (code) {
     chunks <- list()
     prev_end <- 0L
 
-    for (k in seq_len(nrow(top_exprs))) {
-        expr_start <- top_exprs$line1[k]
-        expr_end <- top_exprs$line2[k]
+    # Merge expressions that share lines (e.g. semicolon-separated
+    # statements like "a <- 1 ; b <- 2" on one line)
+    merged <- data.frame(line1 = integer(0), line2 = integer(0))
+    i <- 1L
+    while (i <= nrow(top_exprs)) {
+        start <- top_exprs$line1[i]
+        end <- top_exprs$line2[i]
+        while (i < nrow(top_exprs) && top_exprs$line1[i + 1L] <= end) {
+            i <- i + 1L
+            end <- max(end, top_exprs$line2[i])
+        }
+        merged <- rbind(merged, data.frame(line1 = start, line2 = end))
+        i <- i + 1L
+    }
+
+    for (k in seq_len(nrow(merged))) {
+        expr_start <- merged$line1[k]
+        expr_end <- merged$line2[k]
 
         # Gap before this expression
         if (expr_start > prev_end + 1L) {
@@ -890,7 +913,8 @@ format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
     # Reformat function definitions
     code <- apply_if_parseable(code, reformat_function_defs, wrap = wrap,
                                brace_style = brace_style,
-                               line_limit = line_limit)
+                               line_limit = line_limit,
+                               function_space = function_space)
     # Function-def rewrites can expose bare one-line control flow.
     if (control_braces) {
         code <- apply_if_parseable(code, add_control_braces)
