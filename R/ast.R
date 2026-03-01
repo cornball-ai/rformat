@@ -501,7 +501,7 @@ renumber_lines <- function (terms) {
 #' @param line_limit Maximum line length.
 #' @return Updated DataFrame.
 #' @keywords internal
-collapse_calls_ast <- function (terms, indent_str, line_limit = 80L) {
+collapse_calls <- function (terms, indent_str, line_limit = 80L) {
     changed <- TRUE
     max_iter <- 100L
 
@@ -634,7 +634,7 @@ collapse_calls_ast <- function (terms, indent_str, line_limit = 80L) {
 
             # Check if collapsed line exceeds line limit.
             # Only skip when there are no depth-0 commas inside
-            # the call — if commas exist, wrap_long_calls_ast
+            # the call — if commas exist, wrap_long_calls
             # can re-wrap after collapse.
             if (ast_line_width(terms, open_line,
                 indent_str) > line_limit) {
@@ -710,7 +710,7 @@ renumber_lines <- function (terms) {
 #' @param line_limit Maximum line length.
 #' @return Updated DataFrame.
 #' @keywords internal
-wrap_long_operators_ast <- function (terms, indent_str, line_limit = 80L) {
+wrap_long_operators <- function (terms, indent_str, line_limit = 80L) {
     break_ops <- c("OR2", "AND2", "OR", "AND")
     changed <- TRUE
     max_iter <- 100L
@@ -809,7 +809,7 @@ wrap_long_operators_ast <- function (terms, indent_str, line_limit = 80L) {
 #' @param line_limit Maximum line length.
 #' @return Updated DataFrame.
 #' @keywords internal
-wrap_long_calls_ast <- function (terms, indent_str, wrap = "paren",
+wrap_long_calls <- function (terms, indent_str, wrap = "paren",
                                  line_limit = 80L) {
     changed <- TRUE
     max_iter <- 100L
@@ -1100,7 +1100,7 @@ wrap_long_calls_ast <- function (terms, indent_str, wrap = "paren",
 #' @param function_space Whether to add space after `function`.
 #' @return Updated DataFrame.
 #' @keywords internal
-reformat_function_defs_ast <- function (terms, indent_str = "    ",
+reformat_function_defs <- function (terms, indent_str = "    ",
                                         wrap = "paren",
                                         brace_style = "kr",
                                         line_limit = 80L,
@@ -1498,7 +1498,7 @@ body_is_complete <- function (terms, body_range) {
 #' @param line_limit Maximum line width.
 #' @return Updated DataFrame.
 #' @keywords internal
-add_control_braces_ast <- function (terms, mode = "single",
+add_control_braces <- function (terms, mode = "single",
                                     indent_str = "    ",
                                     line_limit = 80L) {
     if (isTRUE(mode)) mode <- "single"
@@ -1973,7 +1973,7 @@ add_control_braces_ast <- function (terms, mode = "single",
 #' @param line_limit Maximum line width.
 #' @return Updated DataFrame.
 #' @keywords internal
-expand_call_if_args_ast <- function (terms, indent_str = "    ",
+expand_call_if_args <- function (terms, indent_str = "    ",
                                      line_limit = 80L) {
     changed <- TRUE
     max_iter <- 200L
@@ -2282,7 +2282,7 @@ expand_call_if_args_ast <- function (terms, indent_str = "    ",
 #' @param line_limit Maximum line width. Use 0 to expand all.
 #' @return Updated DataFrame.
 #' @keywords internal
-reformat_inline_if_ast <- function (terms, indent_str = "    ",
+reformat_inline_if <- function (terms, indent_str = "    ",
                                     line_limit = 0L) {
     changed <- TRUE
     max_iter <- 200L
@@ -2612,7 +2612,7 @@ reformat_inline_if_ast <- function (terms, indent_str = "    ",
 #' @param control_braces Control brace mode.
 #' @return Formatted code string.
 #' @keywords internal
-format_pipeline_ast <- function (code, indent, wrap, expand_if, brace_style,
+format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
                                  line_limit, function_space = FALSE,
                                  control_braces = FALSE) {
     indent_str <- if (is.numeric(indent)) strrep(" ", indent) else indent
@@ -2627,41 +2627,41 @@ format_pipeline_ast <- function (code, indent, wrap, expand_if, brace_style,
 
     # --- AST transforms (single DataFrame, no re-parsing) ---
 
-    terms <- collapse_calls_ast(terms, indent_str, line_limit)
+    terms <- collapse_calls(terms, indent_str, line_limit)
     if (!isFALSE(control_braces))
-        terms <- add_control_braces_ast(terms, control_braces,
+        terms <- add_control_braces(terms, control_braces,
                                         indent_str, line_limit)
-    terms <- expand_call_if_args_ast(terms, indent_str, line_limit)
+    terms <- expand_call_if_args(terms, indent_str, line_limit)
     if (!isFALSE(control_braces))
-        terms <- add_control_braces_ast(terms, control_braces,
+        terms <- add_control_braces(terms, control_braces,
                                         indent_str, line_limit)
-    terms <- wrap_long_operators_ast(terms, indent_str, line_limit)
-    terms <- wrap_long_calls_ast(terms, indent_str, wrap, line_limit)
-    terms <- reformat_function_defs_ast(terms, indent_str,
+    terms <- wrap_long_operators(terms, indent_str, line_limit)
+    terms <- wrap_long_calls(terms, indent_str, wrap, line_limit)
+    terms <- reformat_function_defs(terms, indent_str,
         wrap = wrap, brace_style = brace_style,
         line_limit = line_limit, function_space = function_space)
     if (!isFALSE(control_braces))
-        terms <- add_control_braces_ast(terms, control_braces,
+        terms <- add_control_braces(terms, control_braces,
                                         indent_str, line_limit)
     if (isTRUE(expand_if))
-        terms <- reformat_inline_if_ast(terms, indent_str,
+        terms <- reformat_inline_if(terms, indent_str,
                                          line_limit = 0L)
     else
-        terms <- reformat_inline_if_ast(terms, indent_str,
+        terms <- reformat_inline_if(terms, indent_str,
                                          line_limit = line_limit)
     if (!isFALSE(control_braces))
-        terms <- add_control_braces_ast(terms, control_braces,
+        terms <- add_control_braces(terms, control_braces,
                                         indent_str, line_limit)
-    terms <- expand_call_if_args_ast(terms, indent_str, line_limit)
+    terms <- expand_call_if_args(terms, indent_str, line_limit)
     if (!isFALSE(control_braces))
-        terms <- add_control_braces_ast(terms, control_braces,
+        terms <- add_control_braces(terms, control_braces,
                                         indent_str, line_limit)
-    terms <- collapse_calls_ast(terms, indent_str, line_limit)
-    terms <- wrap_long_operators_ast(terms, indent_str, line_limit)
-    terms <- wrap_long_calls_ast(terms, indent_str, wrap, line_limit)
-    terms <- wrap_long_operators_ast(terms, indent_str, line_limit)
+    terms <- collapse_calls(terms, indent_str, line_limit)
+    terms <- wrap_long_operators(terms, indent_str, line_limit)
+    terms <- wrap_long_calls(terms, indent_str, wrap, line_limit)
+    terms <- wrap_long_operators(terms, indent_str, line_limit)
     if (!isFALSE(control_braces))
-        terms <- add_control_braces_ast(terms, control_braces,
+        terms <- add_control_braces(terms, control_braces,
                                         indent_str, line_limit)
 
     serialize_tokens(terms, indent_str, wrap, line_limit)
