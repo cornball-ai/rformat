@@ -324,7 +324,11 @@ compute_nesting <- function(terminals, n_lines) {
                 0L
             }
         } else if (tok$token %in% c("'('", "'['", "LBB")) {
-            paren_depth <- paren_depth + if (tok$token == "LBB") 2L else 1L
+            paren_depth + if (tok$token == "LBB") {
+                paren_depth <- 2L
+            } else {
+                paren_depth <- 1L
+            }
         } else if (tok$token %in% c("')'", "']'")) {
             paren_depth <- max(0L, paren_depth - 1L)
         }
@@ -402,7 +406,11 @@ compute_indent_at_col <- function(nesting, line_toks, line_num, break_col) {
         paren_depth <- 0L
         pab <- 0L
     }
-    pab_stack <- if (brace_depth > 0L) rep(pab, brace_depth) else integer(0)
+    if (brace_depth > 0L) {
+        pab_stack <- rep(pab, brace_depth)
+    } else {
+        pab_stack <- integer(0)
+    }
 
     for (j in seq_len(nrow(line_toks))) {
         tok_j <- line_toks[j,]

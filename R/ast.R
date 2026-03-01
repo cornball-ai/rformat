@@ -17,7 +17,9 @@ enrich_terminals <- function(pd, orig_lines) {
     terms <- restore_truncated_str_const_tokens(terms, orig_lines)
 
     n <- nrow(terms)
-    if (n == 0L) return(terms)
+    if (n == 0L) {
+        return(terms)
+    }
 
     # Per-token nesting state (state BEFORE processing this token)
     terms$brace_depth <- integer(n)
@@ -30,7 +32,9 @@ enrich_terminals <- function(pd, orig_lines) {
     terms$out_text <- terms$text
     # Convert = assignment to <-
     eq_idx <- which(terms$token == "EQ_ASSIGN")
-    if (length(eq_idx) > 0L) terms$out_text[eq_idx] <- "<-"
+    if (length(eq_idx) > 0L) {
+        terms$out_text[eq_idx] <- "<-"
+    }
 
     # Walk tokens and compute nesting
     brace_depth <- 0L
@@ -60,9 +64,15 @@ enrich_terminals <- function(pd, orig_lines) {
                     pd2 <- 1L
                     k <- i - 2L
                     while (k >= 1L && pd2 > 0L) {
-                        if (terms$token[k] == "')'") pd2 <- pd2 + 1L
-                        if (terms$token[k] == "'('") pd2 <- pd2 - 1L
-                        if (pd2 > 0L) k <- k - 1L
+                        if (terms$token[k] == "')'") {
+                            pd2 <- pd2 + 1L
+                        }
+                        if (terms$token[k] == "'('") {
+                            pd2 <- pd2 - 1L
+                        }
+                        if (pd2 > 0L) {
+                            k <- k - 1L
+                        }
                     }
                     if (k >= 2L &&
                         terms$token[k - 1L] %in% c("IF", "FOR", "WHILE")) {
@@ -115,7 +125,9 @@ enrich_terminals <- function(pd, orig_lines) {
 #' @keywords internal
 recompute_nesting <- function(terms) {
     n <- nrow(terms)
-    if (n == 0L) return(terms)
+    if (n == 0L) {
+        return(terms)
+    }
 
     # Re-sort by output position
     terms <- terms[order(terms$out_line, terms$out_order),]
@@ -145,9 +157,15 @@ recompute_nesting <- function(terms) {
                     pd2 <- 1L
                     k <- i - 2L
                     while (k >= 1L && pd2 > 0L) {
-                        if (terms$token[k] == "')'") pd2 <- pd2 + 1L
-                        if (terms$token[k] == "'('") pd2 <- pd2 - 1L
-                        if (pd2 > 0L) k <- k - 1L
+                        if (terms$token[k] == "')'") {
+                            pd2 <- pd2 + 1L
+                        }
+                        if (terms$token[k] == "'('") {
+                            pd2 <- pd2 - 1L
+                        }
+                        if (pd2 > 0L) {
+                            k <- k - 1L
+                        }
                     }
                     if (k >= 2L &&
                         terms$token[k - 1L] %in% c("IF", "FOR", "WHILE")) {
@@ -218,7 +236,9 @@ token_indent_level <- function(terms, idx) {
 #' @keywords internal
 ast_line_width <- function(terms, line_num, indent_str) {
     idx <- which(terms$out_line == line_num)
-    if (length(idx) == 0L) return(0L)
+    if (length(idx) == 0L) {
+        return(0L)
+    }
 
     line_toks <- terms[idx,]
     # Indent for first token
@@ -255,7 +275,9 @@ ast_line_width <- function(terms, line_num, indent_str) {
 #' @keywords internal
 serialize_tokens <- function(terms, indent_str, wrap = "paren",
                              line_limit = 80L) {
-    if (nrow(terms) == 0L) return("\n")
+    if (nrow(terms) == 0L) {
+        return("\n")
+    }
 
     # Sort by output position
     terms <- terms[order(terms$out_line, terms$out_order),]
@@ -336,8 +358,9 @@ serialize_tokens <- function(terms, indent_str, wrap = "paren",
         # Account for multi-line tokens (e.g., multi-line strings)
         # that consume extra output lines beyond the out_line number
         extra_newlines <- sum(nchar(gsub("[^\n]", "", line_toks$out_text)))
-        if (extra_newlines > 0L)
-        prev_line_num <- prev_line_num + extra_newlines
+        if (extra_newlines > 0L) {
+            prev_line_num <- prev_line_num + extra_newlines
+        }
 
         # Update call-paren stack
         prefix_len <- nchar(line_prefix)
@@ -370,7 +393,11 @@ serialize_tokens <- function(terms, indent_str, wrap = "paren",
                     pos
                 } else if (is_funcdef) {
                     # Funcdef: paren-align in paren mode, 8-space in fixed
-                    if (wrap == "fixed") 8L else pos
+                    if (wrap == "fixed") {
+                        8L
+                    } else {
+                        pos
+                    }
                 } else {
                     0L
                 }
@@ -416,7 +443,9 @@ serialize_tokens <- function(terms, indent_str, wrap = "paren",
 #' @return Updated DataFrame with new rows appended.
 #' @keywords internal
 insert_tokens <- function(terms, new_rows) {
-    if (nrow(new_rows) == 0L) return(terms)
+    if (nrow(new_rows) == 0L) {
+        return(terms)
+    }
 
     # Assign unique IDs
     max_id <- max(as.integer(rownames(terms)))
@@ -475,7 +504,9 @@ make_token <- function(token, text, out_line, out_order, parent = 0L) {
 #' @keywords internal
 renumber_lines <- function(terms) {
     used <- sort(unique(terms$out_line))
-    if (length(used) == 0L) return(terms)
+    if (length(used) == 0L) {
+        return(terms)
+    }
     mapping <- match(terms$out_line, used)
     terms$out_line <- mapping
     terms
@@ -507,8 +538,12 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
         for (ci in target_idx) {
             # Next token should be (
             open_idx <- ci + 1L
-            if (open_idx > nrow(terms)) next
-            if (terms$token[open_idx] != "'('") next
+            if (open_idx > nrow(terms)) {
+                next
+            }
+            if (terms$token[open_idx] != "'('") {
+                next
+            }
 
             open_line <- terms$out_line[open_idx]
 
@@ -516,20 +551,34 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
             depth <- 1L
             close_idx <- open_idx + 1L
             while (close_idx <= nrow(terms) && depth > 0L) {
-                if (terms$token[close_idx] == "'('") depth <- depth + 1L
-                else if (terms$token[close_idx] == "')'") depth <- depth - 1L
-                if (depth > 0L) close_idx <- close_idx + 1L
+                if (terms$token[close_idx] == "'('") {
+                    depth <- depth + 1L
+                } else
+                if (terms$token[close_idx] == "')'") {
+                    depth <- depth - 1L
+                }
+                if (depth > 0L) {
+                    close_idx <- close_idx + 1L
+                }
             }
-            if (close_idx > nrow(terms)) next
+            if (close_idx > nrow(terms)) {
+                next
+            }
 
             # Only multi-line groups
             close_line <- terms$out_line[close_idx]
-            if (close_line == open_line) next
+            if (close_line == open_line) {
+                next
+            }
 
             # Skip if group contains comments or braces
             inner <- terms[seq(open_idx, close_idx),]
-            if (any(inner$token == "COMMENT")) next
-            if (any(inner$token %in% c("'{'", "'}'"))) next
+            if (any(inner$token == "COMMENT")) {
+                next
+            }
+            if (any(inner$token %in% c("'{'", "'}'"))) {
+                next
+            }
 
             # Collapse: move all call tokens + suffix tokens to open_line
             call_range <- seq(ci, close_idx)
@@ -568,8 +617,12 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
                         si <- si + 1L
                         while (si <= n_suffix && call_depth > 0L) {
                             ist <- suffix_toks[si]
-                            if (ist == "'('") call_depth <- call_depth + 1L
-                            if (ist == "')'") call_depth <- call_depth - 1L
+                            if (ist == "'('") {
+                                call_depth <- call_depth + 1L
+                            }
+                            if (ist == "')'") {
+                                call_depth <- call_depth - 1L
+                            }
                             si <- si + 1L
                         }
                         keep_count <- si - 1L
@@ -582,8 +635,12 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
                             if (ist %in% c("'['", "LBB")) {
                                 idx_depth <- idx_depth + 1L
                             }
-                            if (ist == "']'") idx_depth <- idx_depth - 1L
-                            if (ist == "']]'") idx_depth <- idx_depth - 2L
+                            if (ist == "']'") {
+                                idx_depth <- idx_depth - 1L
+                            }
+                            if (ist == "']]'") {
+                                idx_depth <- idx_depth - 2L
+                            }
                             si <- si + 1L
                         }
                         keep_count <- si - 1L
@@ -591,8 +648,10 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
                         break
                     }
                 }
-                if (keep_count < n_suffix)
-                suffix_idx <- suffix_idx[seq_len(keep_count)]
+                if (keep_count < n_suffix) {
+                    suffix_idx <- suffix_idx[seq_len(keep_count)]
+                }
+
             }
 
             # Identify remaining tokens on close_line that won't
@@ -613,7 +672,9 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
                 too_wide <- ast_line_width(terms, open_line,
                     indent_str) > line_limit
                 terms$out_line[all_check] <- saved_check
-                if (too_wide) next
+                if (too_wide) {
+                    next
+                }
             }
 
             all_move <- c(call_range, if (length(suffix_idx) > 0L) suffix_idx,
@@ -630,10 +691,18 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
                 d0 <- 0L
                 for (ck in seq(open_idx + 1L, close_idx - 1L)) {
                     ct <- terms$token[ck]
-                    if (ct %in% c("'('", "'['")) d0 <- d0 + 1L
-                    else if (ct == "LBB") d0 <- d0 + 2L
-                    else if (ct %in% c("')'", "']'")) d0 <- d0 - 1L
-                    else if (ct == "']]'") d0 <- d0 - 2L
+                    if (ct %in% c("'('", "'['")) {
+                        d0 <- d0 + 1L
+                    } else
+                    if (ct == "LBB") {
+                        d0 <- d0 + 2L
+                    } else
+                    if (ct %in% c("')'", "']'")) {
+                        d0 <- d0 - 1L
+                    } else
+                    if (ct == "']]'") {
+                        d0 <- d0 - 2L
+                    }
                     if (ct == "','" && d0 == 0L) {
                         has_d0_comma <- TRUE
                         break
@@ -679,6 +748,7 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
 #'
 #' @param terms Enriched terminal DataFrame.
 #' @return Updated DataFrame with renumbered `out_line`.
+#' @importFrom stats setNames
 #' @keywords internal
 renumber_lines <- function(terms) {
     terms <- terms[order(terms$out_line, terms$out_order),]
@@ -712,13 +782,17 @@ wrap_long_operators <- function(terms, indent_str, line_limit = 80L) {
 
         for (ln in out_lines) {
             width <- ast_line_width(terms, ln, indent_str)
-            if (width <= line_limit) next
+            if (width <= line_limit) {
+                next
+            }
 
             idx <- which(terms$out_line == ln)
             line_toks <- terms[idx,]
 
             # Skip semicolons
-            if (any(line_toks$token == "';'")) next
+            if (any(line_toks$token == "';'")) {
+                next
+            }
 
             # Find paren depth at start of line
             start_paren <- if (nrow(line_toks) > 0L) {
@@ -758,7 +832,9 @@ wrap_long_operators <- function(terms, indent_str, line_limit = 80L) {
                 prev <- tok
             }
 
-            if (is.null(best_break)) next
+            if (is.null(best_break)) {
+                next
+            }
 
             # Split: tokens after the break go to a new line
             break_at <- best_break
@@ -811,33 +887,53 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
         for (ci in call_idx) {
             open_idx <- ci + 1L
-            if (open_idx > nrow(terms)) next
-            if (terms$token[open_idx] != "'('") next
+            if (open_idx > nrow(terms)) {
+                next
+            }
+            if (terms$token[open_idx] != "'('") {
+                next
+            }
 
             call_line <- terms$out_line[ci]
 
             # Only overlong lines
-            if (ast_line_width(terms, call_line, indent_str) <= line_limit) next
+            if (ast_line_width(terms, call_line, indent_str) <= line_limit) {
+                next
+            }
 
             # Only single-line calls
             depth <- 1L
             close_idx <- open_idx + 1L
             while (close_idx <= nrow(terms) && depth > 0L) {
-                if (terms$token[close_idx] == "'('") depth <- depth + 1L
-                else if (terms$token[close_idx] == "')'") depth <- depth - 1L
-                if (depth > 0L) close_idx <- close_idx + 1L
+                if (terms$token[close_idx] == "'('") {
+                    depth <- depth + 1L
+                } else
+                if (terms$token[close_idx] == "')'") {
+                    depth <- depth - 1L
+                }
+                if (depth > 0L) {
+                    close_idx <- close_idx + 1L
+                }
             }
-            if (close_idx > nrow(terms)) next
-            if (terms$out_line[close_idx] != call_line) next
+            if (close_idx > nrow(terms)) {
+                next
+            }
+            if (terms$out_line[close_idx] != call_line) {
+                next
+            }
 
             # Skip calls with braces
             inner <- terms[seq(open_idx, close_idx),]
-            if (any(inner$token %in% c("'{'", "'}'"))) next
+            if (any(inner$token %in% c("'{'", "'}'"))) {
+                next
+            }
 
             # Skip semicolons on this line
             line_idx <- which(terms$out_line == call_line)
             line_toks <- terms[line_idx,]
-            if (any(line_toks$token == "';'")) next
+            if (any(line_toks$token == "';'")) {
+                next
+            }
 
             # Skip inner calls when outer call is wrappable
             func_order <- terms$out_order[ci]
@@ -852,31 +948,55 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
                 for (oc in outer_calls) {
                     oc_row <- which(terms$out_order == line_toks$out_order[oc] &
                                     terms$out_line == call_line)
-                    if (length(oc_row) == 0L) next
+                    if (length(oc_row) == 0L) {
+                        next
+                    }
                     oc_open <- oc_row + 1L
-                    if (oc_open > nrow(terms)) next
-                    if (terms$token[oc_open] != "'('") next
+                    if (oc_open > nrow(terms)) {
+                        next
+                    }
+                    if (terms$token[oc_open] != "'('") {
+                        next
+                    }
                     # Find matching )
                     od <- 1L
                     oc_close <- oc_open + 1L
                     while (oc_close <= nrow(terms) && od > 0L) {
-                        if (terms$token[oc_close] == "'('") od <- od + 1L
-                        if (terms$token[oc_close] == "')'") od <- od - 1L
-                        if (od > 0L) oc_close <- oc_close + 1L
+                        if (terms$token[oc_close] == "'('") {
+                            od <- od + 1L
+                        }
+                        if (terms$token[oc_close] == "')'") {
+                            od <- od - 1L
+                        }
+                        if (od > 0L) {
+                            oc_close <- oc_close + 1L
+                        }
                     }
-                    if (oc_close > nrow(terms)) next
-                    if (terms$out_line[oc_close] != call_line) next
+                    if (oc_close > nrow(terms)) {
+                        next
+                    }
+                    if (terms$out_line[oc_close] != call_line) {
+                        next
+                    }
                     # Check for comma at depth 1
                     d2 <- 0L
                     for (ki in seq(oc_open + 1L, oc_close - 1L)) {
                         tt <- terms$token[ki]
-                        if (tt == "'('") d2 <- d2 + 1L
-                        if (tt == "')'") d2 <- d2 - 1L
+                        if (tt == "'('") {
+                            d2 <- d2 + 1L
+                        }
+                        if (tt == "')'") {
+                            d2 <- d2 - 1L
+                        }
                         if (tt == "','" && d2 == 0L) { skip <- TRUE; break }
                     }
-                    if (skip) break
+                    if (skip) {
+                        break
+                    }
                 }
-                if (skip) next
+                if (skip) {
+                    next
+                }
             }
 
             # Need at least one depth-0 comma
@@ -884,13 +1004,23 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             d2 <- 0L
             for (k in seq(open_idx + 1L, close_idx - 1L)) {
                 tt <- terms$token[k]
-                if (tt %in% c("'('", "'['")) d2 <- d2 + 1L
-                if (tt == "LBB") d2 <- d2 + 2L
-                if (tt %in% c("')'", "']'")) d2 <- d2 - 1L
-                if (tt == "']]'") d2 <- d2 - 2L
+                if (tt %in% c("'('", "'['")) {
+                    d2 <- d2 + 1L
+                }
+                if (tt == "LBB") {
+                    d2 <- d2 + 2L
+                }
+                if (tt %in% c("')'", "']'")) {
+                    d2 <- d2 - 1L
+                }
+                if (tt == "']]'") {
+                    d2 <- d2 - 2L
+                }
                 if (tt == "','" && d2 == 0L) { has_comma <- TRUE; break }
             }
-            if (!has_comma) next
+            if (!has_comma) {
+                next
+            }
 
             # Collect argument groups (ranges of indices between depth-0 commas)
             # Empty args (consecutive commas) get empty integer(0) groups.
@@ -900,10 +1030,18 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             d2 <- 0L
             for (k in seq(open_idx + 1L, close_idx - 1L)) {
                 tt <- terms$token[k]
-                if (tt %in% c("'('", "'['")) d2 <- d2 + 1L
-                if (tt == "LBB") d2 <- d2 + 2L
-                if (tt %in% c("')'", "']'")) d2 <- d2 - 1L
-                if (tt == "']]'") d2 <- d2 - 2L
+                if (tt %in% c("'('", "'['")) {
+                    d2 <- d2 + 1L
+                }
+                if (tt == "LBB") {
+                    d2 <- d2 + 2L
+                }
+                if (tt %in% c("')'", "']'")) {
+                    d2 <- d2 - 1L
+                }
+                if (tt == "']]'") {
+                    d2 <- d2 - 2L
+                }
                 if (tt == "','" && d2 == 0L) {
                     if (current_start <= k - 1L) {
                         arg_groups[[length(arg_groups) + 1L]] <-
@@ -925,7 +1063,9 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
                 # Trailing empty arg
                 arg_groups[[length(arg_groups) + 1L]] <- integer(0)
             }
-            if (length(arg_groups) < 2L) next
+            if (length(arg_groups) < 2L) {
+                next
+            }
 
             # Compute continuation indent
             indent_size <- nchar(indent_str)
@@ -1009,8 +1149,16 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
             for (ai in seq_along(arg_groups)) {
                 aw <- arg_widths[ai]
-                extra <- if (ai < length(arg_groups)) 2L else 1L
-                space_w <- if (!first_on_line) 1L else 0L
+                if (ai < length(arg_groups)) {
+                    extra <- 2L
+                } else {
+                    extra <- 1L
+                }
+                if (!first_on_line) {
+                    space_w <- 1L
+                } else {
+                    space_w <- 0L
+                }
                 test_w <- current_w + space_w + aw + extra
 
                 if (test_w > line_limit && !first_on_line) {
@@ -1027,7 +1175,9 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
                 }
             }
 
-            if (lines_inserted == 0L) next
+            if (lines_inserted == 0L) {
+                next
+            }
 
             # Pass 2: apply line assignments
             # Collect all call-internal token indices
@@ -1106,29 +1256,49 @@ reformat_function_defs <- function(terms, indent_str = "    ",
             while (prev_idx >= 1L && terms$token[prev_idx] == "COMMENT") {
                 prev_idx <- prev_idx - 1L
             }
-            if (prev_idx < 1L) next
+            if (prev_idx < 1L) {
+                next
+            }
             if (!(terms$token[prev_idx] %in%
-                    c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN"))) next
+                    c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN"))) {
+                next
+            }
 
             # Find ( after function
             open_idx <- fi + 1L
-            if (open_idx > nrow(terms)) next
-            if (terms$token[open_idx] != "'('") next
+            if (open_idx > nrow(terms)) {
+                next
+            }
+            if (terms$token[open_idx] != "'('") {
+                next
+            }
 
             # Find matching )
             depth <- 1L
             close_idx <- open_idx + 1L
             while (close_idx <= nrow(terms) && depth > 0L) {
-                if (terms$token[close_idx] == "'('") depth <- depth + 1L
-                else if (terms$token[close_idx] == "')'") depth <- depth - 1L
-                if (depth > 0L) close_idx <- close_idx + 1L
+                if (terms$token[close_idx] == "'('") {
+                    depth <- depth + 1L
+                } else
+                if (terms$token[close_idx] == "')'") {
+                    depth <- depth - 1L
+                }
+                if (depth > 0L) {
+                    close_idx <- close_idx + 1L
+                }
             }
-            if (close_idx > nrow(terms)) next
+            if (close_idx > nrow(terms)) {
+                next
+            }
 
             # Check for { after )
             has_brace <- close_idx + 1L <= nrow(terms) &&
             terms$token[close_idx + 1L] == "'{'"
-            brace_idx <- if (has_brace) close_idx + 1L else NULL
+            if (has_brace) {
+                brace_idx <- close_idx + 1L
+            } else {
+                brace_idx <- NULL
+            }
 
             func_line <- terms$out_line[fi]
 
@@ -1154,7 +1324,11 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                 prefix_w <- prefix_w + 1L
             }
 
-            func_open_text <- if (function_space) "function (" else "function("
+            if (function_space) {
+                func_open_text <- "function ("
+            } else {
+                func_open_text <- "function("
+            }
             func_open_w <- nchar(func_open_text)
             # Width up to and including "("
             open_col <- prefix_w + func_open_w
@@ -1173,8 +1347,12 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                     i <- i + 1L
                     next
                 }
-                if (tok$token == "'('") formal_depth <- formal_depth + 1L
-                if (tok$token == "')'") formal_depth <- formal_depth - 1L
+                if (tok$token == "'('") {
+                    formal_depth <- formal_depth + 1L
+                }
+                if (tok$token == "')'") {
+                    formal_depth <- formal_depth - 1L
+                }
                 if (tok$token == "','" && formal_depth == 0L) {
                     if (length(current_group) > 0L) {
                         arg_groups[[length(arg_groups) + 1L]] <- current_group
@@ -1191,7 +1369,9 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                 arg_groups[[length(arg_groups) + 1L]] <- current_group
             }
 
-            if (length(arg_groups) == 0L) next
+            if (length(arg_groups) == 0L) {
+                next
+            }
 
             # Measure each arg group width
             arg_widths <- integer(length(arg_groups))
@@ -1216,9 +1396,13 @@ reformat_function_defs <- function(terms, indent_str = "    ",
             # Comments or braces inside formals prevent collapse
             formal_range <- seq(open_idx + 1L, close_idx - 1L)
             has_comment <- any(terms$token[formal_range] == "COMMENT")
-            if (has_comment) next
+            if (has_comment) {
+                next
+            }
             has_braces <- any(terms$token[formal_range] == "'{'")
-            if (has_braces) next
+            if (has_braces) {
+                next
+            }
 
             # Single-line width: prefix + function( + arg1, arg2, ..., argN)
             single_w <- open_col +
@@ -1245,7 +1429,9 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                     terms$out_line[brace_idx] != target_line
                 }
 
-                if (!need_change) next
+                if (!need_change) {
+                    next
+                }
 
                 terms$out_line[all_range] <- target_line
                 for (ci_comma in comma_indices) {
@@ -1279,7 +1465,11 @@ reformat_function_defs <- function(terms, indent_str = "    ",
 
                 for (ai in seq_along(arg_groups)) {
                     aw <- arg_widths[ai]
-                    extra <- if (ai < length(arg_groups)) 2L else 1L
+                    if (ai < length(arg_groups)) {
+                        extra <- 2L
+                    } else {
+                        extra <- 1L
+                    }
                     # After "(" or at start of continuation: no space
                     # After ", " from previous arg: space already in extra
                     test_w <- current_w + aw + extra
@@ -1296,7 +1486,9 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                     }
                 }
 
-                if (lines_inserted == 0L) next
+                if (lines_inserted == 0L) {
+                    next
+                }
 
                 # Second pass: first collapse the entire signature region
                 # to func_line, then shift everything after it down.
@@ -1347,19 +1539,25 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                     terms$token[brace_idx + 1L] == "'}'"
                     if (brace_style == "kr") {
                         terms$out_line[brace_idx] <- last_line
-                        if (empty_body)
-                        terms$out_line[brace_idx + 1L] <- last_line
+                        if (empty_body) {
+                            terms$out_line[brace_idx + 1L] <- last_line
+                        }
+
                     } else {
                         # Allman: brace on its own line after )
                         # Need one more line
                         excl <- brace_idx
-                        if (empty_body) excl <- c(excl, brace_idx + 1L)
+                        if (empty_body) {
+                            excl <- c(excl, brace_idx + 1L)
+                        }
                         later2 <- terms$out_line > last_line &
                         !seq_len(nrow(terms)) %in% excl
                         terms$out_line[later2] <- terms$out_line[later2] + 1L
                         terms$out_line[brace_idx] <- last_line + 1L
-                        if (empty_body)
-                        terms$out_line[brace_idx + 1L] <- last_line + 1L
+                        if (empty_body) {
+                            terms$out_line[brace_idx + 1L] <- last_line + 1L
+                        }
+
                     }
                 }
 
@@ -1380,8 +1578,8 @@ reformat_function_defs <- function(terms, indent_str = "    ",
 #' with an operator that expects a continuation (assignment, binary ops).
 #'
 #' @param terms Enriched terminal DataFrame.
-#' @param body_range Integer vector of row indices for the body.
-#' @return TRUE if the body is a complete, self-contained statement.
+#' @param body_start Integer row index where the bare body begins.
+#' @return Integer row index of the last token in the bare body.
 #' @keywords internal
 find_bare_body_end <- function(terms, body_start) {
     n <- nrow(terms)
@@ -1400,25 +1598,45 @@ find_bare_body_end <- function(terms, body_start) {
     i <- body_start
     while (i <= n) {
         tok <- terms$token[i]
-        if (tok %in% c("'('", "'['")) pd <- pd + 1L
-        else if (tok == "LBB") pd <- pd + 2L
-        else if (tok %in% c("')'", "']'")) pd <- pd - 1L
-        else if (tok == "']]'") pd <- pd - 2L
-        else if (tok == "'{'") bd <- bd + 1L
-        else if (tok == "'}'") {
+        if (tok %in% c("'('", "'['")) {
+            pd <- pd + 1L
+        } else
+        if (tok == "LBB") {
+            pd <- pd + 2L
+        } else
+        if (tok %in% c("')'", "']'")) {
+            pd <- pd - 1L
+        } else
+        if (tok == "']]'") {
+            pd <- pd - 2L
+        } else
+        if (tok == "'{'") {
+            bd <- bd + 1L
+        } else
+        if (tok == "'}'") {
             bd <- bd - 1L
-            if (bd < 0L) return(i - 1L)
+            if (bd < 0L) {
+                return(i - 1L)
+            }
         }
-        else if (tok == "IF" && pd == 0L && bd == 0L) id <- id + 1L
-        else if (tok == "ELSE" && pd == 0L && bd == 0L) {
-            if (id > 0L) id <- id - 1L
-            else return(i - 1L)
+        else if (tok == "IF" && pd == 0L && bd == 0L) {
+            id <- id + 1L
+        } else
+        if (tok == "ELSE" && pd == 0L && bd == 0L) {
+            if (id > 0L) {
+                id <- id - 1L
+            } else {
+                return(i - 1L)
+            }
+
         }
         # Check statement end at balanced state
         # Skip ELSE tokens — they need to consume their body first
         if (pd == 0L && bd == 0L && id == 0L && i > body_start &&
             tok != "ELSE") {
-            if (i + 1L > n) return(i)
+            if (i + 1L > n) {
+                return(i)
+            }
             next_tok <- terms$token[i + 1L]
             if (next_tok %in% c("ELSE", "'}'")) {
                 # ELSE of enclosing if or closing brace
@@ -1428,8 +1646,12 @@ find_bare_body_end <- function(terms, body_start) {
                 # For COMMENT tokens, use last non-comment token for
                 # trailing op check (comment between <- and value,
                 # or comment after else keyword)
-                check_tok <- if (tok == "COMMENT") last_real_tok
-                else tok
+                if (tok == "COMMENT") {
+                    check_tok <- last_real_tok
+                } else {
+                    check_tok <- tok
+                }
+
                 if (!(check_tok %in% c(trailing_ops, "ELSE")) &&
                     !(next_tok %in% cont_starts) &&
                     next_tok != "COMMENT") {
@@ -1437,7 +1659,9 @@ find_bare_body_end <- function(terms, body_start) {
                 }
             }
         }
-        if (tok != "COMMENT") last_real_tok <- tok
+        if (tok != "COMMENT") {
+            last_real_tok <- tok
+        }
         i <- i + 1L
     }
     n
@@ -1448,12 +1672,22 @@ body_is_complete <- function(terms, body_range) {
     bal <- 0L
     for (bi in body_range) {
         bt <- terms$token[bi]
-        if (bt %in% c("'('", "'['")) bal <- bal + 1L
-        else if (bt == "LBB") bal <- bal + 2L
-        else if (bt %in% c("')'", "']'")) bal <- bal - 1L
-        else if (bt == "']]'") bal <- bal - 2L
+        if (bt %in% c("'('", "'['")) {
+            bal <- bal + 1L
+        } else
+        if (bt == "LBB") {
+            bal <- bal + 2L
+        } else
+        if (bt %in% c("')'", "']'")) {
+            bal <- bal - 1L
+        } else
+        if (bt == "']]'") {
+            bal <- bal - 2L
+        }
     }
-    if (bal != 0L) return(FALSE)
+    if (bal != 0L) {
+        return(FALSE)
+    }
 
     # Check for trailing operator (incomplete statement)
     last_tok <- terms$token[body_range[length(body_range)]]
@@ -1461,7 +1695,9 @@ body_is_complete <- function(terms, body_range) {
                   "'*'", "'/'", "'^'", "'~'", "SPECIAL", "','", "OR2",
                   "AND2", "OR", "AND", "GT", "GE", "LT", "LE", "EQ",
                   "NE")
-    if (last_tok %in% cont_ops) return(FALSE)
+    if (last_tok %in% cont_ops) {
+        return(FALSE)
+    }
 
     TRUE
 }
@@ -1485,7 +1721,9 @@ body_is_complete <- function(terms, body_range) {
 #' @keywords internal
 add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                                line_limit = 80L) {
-    if (isTRUE(mode)) mode <- "single"
+    if (isTRUE(mode)) {
+        mode <- "single"
+    }
 
     changed <- TRUE
     max_iter <- 200L
@@ -1512,18 +1750,30 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
             } else {
                 # Next token should be '('
                 open_idx <- ci + 1L
-                if (open_idx > n) next
-                if (terms$token[open_idx] != "'('") next
+                if (open_idx > n) {
+                    next
+                }
+                if (terms$token[open_idx] != "'('") {
+                    next
+                }
 
                 # Find matching ')'
                 depth <- 1L
                 cond_close <- open_idx + 1L
                 while (cond_close <= n && depth > 0L) {
-                    if (terms$token[cond_close] == "'('") depth <- depth + 1L
-                    if (terms$token[cond_close] == "')'") depth <- depth - 1L
-                    if (depth > 0L) cond_close <- cond_close + 1L
+                    if (terms$token[cond_close] == "'('") {
+                        depth <- depth + 1L
+                    }
+                    if (terms$token[cond_close] == "')'") {
+                        depth <- depth - 1L
+                    }
+                    if (depth > 0L) {
+                        cond_close <- cond_close + 1L
+                    }
                 }
-                if (cond_close > n) next
+                if (cond_close > n) {
+                    next
+                }
             }
 
             # --- Find body start (first non-comment token after condition) ---
@@ -1531,17 +1781,23 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
             while (body_start <= n && terms$token[body_start] == "COMMENT") {
                 body_start <- body_start + 1L
             }
-            if (body_start > n) next
+            if (body_start > n) {
+                next
+            }
 
             body_line <- terms$out_line[body_start]
 
             # --- Skip else-if chains (ELSE followed by IF) ---
-            if (tok == "ELSE" && terms$token[body_start] == "IF") next
+            if (tok == "ELSE" && terms$token[body_start] == "IF") {
+                next
+            }
 
             # --- Skip expression-context if-else ---
             if (tok %in% c("IF", "ELSE")) {
                 # Skip if inside parens (function argument, etc.)
-                if (terms$paren_depth[ci] > 0L) next
+                if (terms$paren_depth[ci] > 0L) {
+                    next
+                }
 
                 # For IF: skip if preceded by assignment on same line
                 # For ELSE: find the parent IF and apply same check
@@ -1551,12 +1807,22 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                     bd <- 0L
                     while (parent_if >= 1L) {
                         pt <- terms$token[parent_if]
-                        if (pt == "'}'") bd <- bd + 1L
-                        else if (pt == "'{'") bd <- bd - 1L
-                        if (bd == 0L && pt == "IF") break
+                        if (pt == "'}'") {
+                            bd <- bd + 1L
+                        } else
+                        if (pt == "'{'") {
+                            bd <- bd - 1L
+                        }
+                        if (bd == 0L && pt == "IF") {
+                            break
+                        }
                         parent_if <- parent_if - 1L
                     }
-                    if (parent_if >= 1L) parent_if else NULL
+                    if (parent_if >= 1L) {
+                        parent_if
+                    } else {
+                        NULL
+                    }
                 } else {
                     ci
                 }
@@ -1566,7 +1832,9 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                     skip <- FALSE
                     if (check_idx >= 2L) {
                         for (k in seq(check_idx - 1L, 1L)) {
-                            if (terms$out_line[k] != check_line) break
+                            if (terms$out_line[k] != check_line) {
+                                break
+                            }
                             if (terms$token[k] %in% c("LEFT_ASSIGN",
                                     "EQ_ASSIGN", "RIGHT_ASSIGN")) {
                                 skip <- TRUE
@@ -1574,7 +1842,9 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                             }
                         }
                     }
-                    if (skip) next
+                    if (skip) {
+                        next
+                    }
                 }
             }
 
@@ -1582,7 +1852,9 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
 
             if (mode %in% c("single", "multi")) {
                 # Body already braced? Skip.
-                if (terms$token[body_start] == "'{'") next
+                if (terms$token[body_start] == "'{'") {
+                    next
+                }
 
                 # Body must start on same line as condition close
                 # (or next line for bare next-line bodies)
@@ -1603,17 +1875,23 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                 if (body_end + 1L <= n &&
                     terms$out_line[body_end + 1L] == body_start_line &&
                     !(terms$token[body_end + 1L] %in%
-                        c("ELSE", "'}'", "COMMENT"))) next
+                        c("ELSE", "'}'", "COMMENT"))) {
+                    next
+                }
 
                 # Skip bodies with complex tokens
                 body_range <- seq(body_start, body_end)
                 body_toks <- terms$token[body_range]
-                if (any(body_toks %in% c("IF", "FOR", "WHILE",
-                            "REPEAT", "FUNCTION"))) next
+                if (any(body_toks %in% c("IF", "FOR", "WHILE", "REPEAT",
+                            "FUNCTION"))) {
+                    next
+                }
 
                 # Skip incomplete statements (unclosed parens or
                 # trailing operators)
-                if (!body_is_complete(terms, body_range)) next
+                if (!body_is_complete(terms, body_range)) {
+                    next
+                }
 
                 # Check for ELSE after body
                 has_else <- body_end + 1L <= n &&
@@ -1722,7 +2000,9 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
 
             } else if (mode == "next_line") {
                 # Body already braced? Skip.
-                if (terms$token[body_start] == "'{'") next
+                if (terms$token[body_start] == "'{'") {
+                    next
+                }
 
                 cond_close_line <- terms$out_line[cond_close]
                 body_start_line <- terms$out_line[body_start]
@@ -1797,8 +2077,10 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                 # Skip complex bodies
                 body_range <- seq(body_start, body_end)
                 body_toks <- terms$token[body_range]
-                if (any(body_toks %in% c("IF", "FOR", "WHILE",
-                            "REPEAT", "FUNCTION"))) next
+                if (any(body_toks %in% c("IF", "FOR", "WHILE", "REPEAT",
+                            "FUNCTION"))) {
+                    next
+                }
 
                 # Move body to next line
                 later <- terms$out_line > cond_close_line
@@ -1826,7 +2108,9 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                 # Skip if condition line has a trailing comment
                 cond_line_toks <- terms$token[
                     terms$out_line == cond_close_line]
-                if (any(cond_line_toks == "COMMENT")) next
+                if (any(cond_line_toks == "COMMENT")) {
+                    next
+                }
 
                 if (terms$token[body_start] == "'{'") {
                     # --- Strip braces if single-statement body ---
@@ -1845,35 +2129,47 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                             close_brace_idx <- close_brace_idx + 1L
                         }
                     }
-                    if (close_brace_idx > n) next
+                    if (close_brace_idx > n) {
+                        next
+                    }
 
                     # Inner body tokens
                     inner_start <- open_brace_idx + 1L
                     inner_end <- close_brace_idx - 1L
-                    if (inner_start > inner_end) next
+                    if (inner_start > inner_end) {
+                        next
+                    }
 
                     inner_range <- seq(inner_start, inner_end)
                     inner_toks <- terms$token[inner_range]
 
                     # Skip if multi-line body
                     inner_lines <- unique(terms$out_line[inner_range])
-                    if (length(inner_lines) > 1L) next
+                    if (length(inner_lines) > 1L) {
+                        next
+                    }
 
                     # Skip complex bodies (control flow, semicolons)
                     if (any(inner_toks %in% c("IF", "FOR", "WHILE",
-                                "REPEAT", "FUNCTION", "COMMENT", "';'"))) next
+                                "REPEAT", "FUNCTION", "COMMENT", "';'"))) {
+                        next
+                    }
 
                     # Skip if this if has an else (stripping braces
                     # would put else on a separate line)
                     has_else <- close_brace_idx + 1L <= n &&
                     terms$token[close_brace_idx + 1L] == "ELSE"
-                    if (has_else) next
+                    if (has_else) {
+                        next
+                    }
 
                     # Skip if combined line would exceed line_limit
                     cond_w <- ast_line_width(terms, cond_close_line, indent_str)
                     body_w <- ast_line_width(terms,
                         terms$out_line[inner_start], indent_str)
-                    if (cond_w + 1L + body_w > line_limit) next
+                    if (cond_w + 1L + body_w > line_limit) {
+                        next
+                    }
 
                     # Move inner tokens to condition line
                     terms$out_line[inner_range] <- cond_close_line
@@ -1910,16 +2206,22 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
 
                 body_range <- seq(body_start, body_end)
                 body_toks <- terms$token[body_range]
-                if (any(body_toks %in% c("IF", "FOR", "WHILE",
-                            "REPEAT", "FUNCTION", "COMMENT"))) next
+                if (any(body_toks %in% c("IF", "FOR", "WHILE", "REPEAT",
+                            "FUNCTION", "COMMENT"))) {
+                    next
+                }
 
                 # Skip incomplete statements
-                if (!body_is_complete(terms, body_range)) next
+                if (!body_is_complete(terms, body_range)) {
+                    next
+                }
 
                 # Skip if combined line would exceed line_limit
                 cond_w <- ast_line_width(terms, cond_close_line, indent_str)
                 body_w <- ast_line_width(terms, body_start_line, indent_str)
-                if (cond_w + 1L + body_w > line_limit) next
+                if (cond_w + 1L + body_w > line_limit) {
+                    next
+                }
 
                 terms$out_line[body_range] <- cond_close_line
                 terms <- renumber_lines(terms)
@@ -1960,11 +2262,15 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
 
         for (ii in if_indices) {
             # Must be inside parens (call argument)
-            if (terms$paren_depth[ii] < 1L) next
+            if (terms$paren_depth[ii] < 1L) {
+                next
+            }
 
             # Line must be overlong
             if_line <- terms$out_line[ii]
-            if (ast_line_width(terms, if_line, indent_str) <= line_limit) next
+            if (ast_line_width(terms, if_line, indent_str) <= line_limit) {
+                next
+            }
 
             # Skip if inside function formals or inside braces
             # within a call (e.g., function(x) { if (cond) ... })
@@ -1973,12 +2279,16 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
             scan_depth <- 0L
             for (j in rev(seq_len(ii - 1L))) {
                 jt <- terms$token[j]
-                if (jt == "')'") scan_depth <- scan_depth + 1L
-                else if (jt == "'('") {
+                if (jt == "')'") {
+                    scan_depth <- scan_depth + 1L
+                } else
+                if (jt == "'('") {
                     if (scan_depth == 0L) {
                         enc_paren_idx <- j
-                        if (j > 1L && terms$token[j - 1L] == "FUNCTION")
-                        skip_if <- TRUE
+                        if (j > 1L && terms$token[j - 1L] == "FUNCTION") {
+                            skip_if <- TRUE
+                        }
+
                         break
                     }
                     scan_depth <- scan_depth - 1L
@@ -1988,26 +2298,44 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
             # it's inside a block, not a direct call argument
             if (enc_paren_idx > 0L &&
                 terms$brace_depth[ii] >
-                terms$brace_depth[enc_paren_idx])
-            skip_if <- TRUE
-            if (skip_if) next
+                terms$brace_depth[enc_paren_idx]) {
+                skip_if <- TRUE
+            }
+
+            if (skip_if) {
+                next
+            }
 
             # Find condition close paren
             open_idx <- ii + 1L
-            if (open_idx > n || terms$token[open_idx] != "'('") next
+            if (open_idx > n || terms$token[open_idx] != "'('") {
+                next
+            }
             depth <- 1L
             close_idx <- open_idx + 1L
             while (close_idx <= n && depth > 0L) {
-                if (terms$token[close_idx] == "'('") depth <- depth + 1L
-                if (terms$token[close_idx] == "')'") depth <- depth - 1L
-                if (depth > 0L) close_idx <- close_idx + 1L
+                if (terms$token[close_idx] == "'('") {
+                    depth <- depth + 1L
+                }
+                if (terms$token[close_idx] == "')'") {
+                    depth <- depth - 1L
+                }
+                if (depth > 0L) {
+                    close_idx <- close_idx + 1L
+                }
             }
-            if (close_idx > n) next
+            if (close_idx > n) {
+                next
+            }
 
             # Must be bare (no brace after condition)
             body_first <- close_idx + 1L
-            if (body_first > n) next
-            if (terms$token[body_first] == "'{'") next
+            if (body_first > n) {
+                next
+            }
+            if (terms$token[body_first] == "'{'") {
+                next
+            }
 
             # Find matching ELSE (stop if we exit enclosing parens)
             else_idx <- NULL
@@ -2023,18 +2351,28 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
                     paren_depth <- paren_depth + 2L
                 } else if (st %in% c("')'", "']'")) {
                     paren_depth <- paren_depth - 1L
-                    if (paren_depth < 0L) break
+                    if (paren_depth < 0L) {
+                        break
+                    }
                 } else if (st == "']]'") {
                     paren_depth <- paren_depth - 2L
-                    if (paren_depth < 0L) break
+                    if (paren_depth < 0L) {
+                        break
+                    }
                 }
-                if (st == "'{'") brace_depth <- brace_depth + 1L
-                else if (st == "'}'") {
+                if (st == "'{'") {
+                    brace_depth <- brace_depth + 1L
+                } else
+                if (st == "'}'") {
                     brace_depth <- brace_depth - 1L
-                    if (brace_depth < 0L) break
+                    if (brace_depth < 0L) {
+                        break
+                    }
                 }
-                if (st == "IF") nest_depth <- nest_depth + 1L
-                else if (st == "ELSE") {
+                if (st == "IF") {
+                    nest_depth <- nest_depth + 1L
+                } else
+                if (st == "ELSE") {
                     if (nest_depth == 0L && brace_depth == 0L &&
                         paren_depth == 0L) {
                         else_idx <- search_idx
@@ -2045,16 +2383,24 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
                 }
                 search_idx <- search_idx + 1L
             }
-            if (is.null(else_idx)) next
+            if (is.null(else_idx)) {
+                next
+            }
 
             # Extract true expression tokens
             true_range <- seq(close_idx + 1L, else_idx - 1L)
-            if (length(true_range) == 0L) next
+            if (length(true_range) == 0L) {
+                next
+            }
 
             # Find end of false expression
             false_start <- else_idx + 1L
-            if (false_start > n) next
-            if (terms$token[false_start] == "'{'") next
+            if (false_start > n) {
+                next
+            }
+            if (terms$token[false_start] == "'{'") {
+                next
+            }
 
             false_end <- false_start
             fp_depth <- 0L
@@ -2064,15 +2410,23 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
 
             while (false_end <= n) {
                 ft <- terms$token[false_end]
-                if (ft == "IF" && terms$out_line[false_end] == false_start_line)
-                fif_depth <- fif_depth + 1L
+                if (ft == "IF" &&
+                    terms$out_line[false_end] == false_start_line) {
+                    fif_depth <- fif_depth + 1L
+                }
+
                 if (ft == "ELSE" &&
-                    terms$out_line[false_end] == false_start_line)
-                fif_depth <- max(0L, fif_depth - 1L)
+                    terms$out_line[false_end] == false_start_line) {
+                    fif_depth <- max(0L, fif_depth - 1L)
+                }
 
                 prev_fp <- fp_depth
-                if (ft %in% c("'('", "'['")) fp_depth <- fp_depth + 1L
-                if (ft == "LBB") fp_depth <- fp_depth + 2L
+                if (ft %in% c("'('", "'['")) {
+                    fp_depth <- fp_depth + 1L
+                }
+                if (ft == "LBB") {
+                    fp_depth <- fp_depth + 2L
+                }
                 if (ft == "','") {
                     if (fp_depth == 0L && fb_depth == 0L && fif_depth == 0L) {
                         false_end <- false_end - 1L
@@ -2086,9 +2440,15 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
                     }
                     fp_depth <- fp_depth - 1L
                 }
-                if (ft == "']]'") fp_depth <- fp_depth - 2L
-                if (ft == "'{'") fb_depth <- fb_depth + 1L
-                if (ft == "'}'") fb_depth <- fb_depth - 1L
+                if (ft == "']]'") {
+                    fp_depth <- fp_depth - 2L
+                }
+                if (ft == "'{'") {
+                    fb_depth <- fb_depth + 1L
+                }
+                if (ft == "'}'") {
+                    fb_depth <- fb_depth - 1L
+                }
 
                 cont_toks <- c("'['", "LBB", "'('", "'$'", "'@'", "'+'",
                                "'-'", "'*'", "'/'", "'^'", "PIPE",
@@ -2098,7 +2458,9 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
                     fb_depth == 0L && fif_depth == 0L) {
                     next_ok <- false_end + 1L <= n &&
                     terms$token[false_end + 1L] %in% cont_toks
-                    if (!next_ok) break
+                    if (!next_ok) {
+                        break
+                    }
                     # Continuation confirmed — update start line
                     # so line-boundary check doesn't break on the
                     # continuation operator or its operand
@@ -2114,8 +2476,12 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
 
                 false_end <- false_end + 1L
             }
-            if (false_end > n) false_end <- n
-            if (false_end < false_start) next
+            if (false_end > n) {
+                false_end <- n
+            }
+            if (false_end < false_start) {
+                next
+            }
 
             false_range <- seq(false_start, false_end)
 
@@ -2125,11 +2491,15 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
             if (any(true_toks == "FUNCTION") ||
                 any(false_toks == "FUNCTION") ||
                 any(true_toks == "COMMENT") ||
-                any(false_toks == "COMMENT")) next
+                any(false_toks == "COMMENT")) {
+                next
+            }
 
             # Skip if already multi-line
             if (any(terms$out_line[true_range] != if_line) ||
-                any(terms$out_line[false_range] != if_line)) next
+                any(terms$out_line[false_range] != if_line)) {
+                next
+            }
 
             # --- Restructure to multi-line braced form ---
             # Layout:
@@ -2200,8 +2570,9 @@ expand_call_if_args <- function(terms, indent_str = "    ", line_limit = 80L) {
             terms$nesting_level[false_range] <- body_level
 
             # suffix - on base_line + 4
-            if (length(suffix_idx) > 0L)
-            terms$out_line[suffix_idx] <- base_line + 4L
+            if (length(suffix_idx) > 0L) {
+                terms$out_line[suffix_idx] <- base_line + 4L
+            }
 
             # Insert braces
             open_true <- make_token("'{'", "{", out_line = base_line,
@@ -2266,58 +2637,90 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
             if_idx <- NULL
             found_function <- FALSE
             for (j in seq(ai + 1L, n)) {
-                if (terms$out_line[j] != assign_line) break
+                if (terms$out_line[j] != assign_line) {
+                    break
+                }
                 jt <- terms$token[j]
                 if (jt == "FUNCTION") {
                     found_function <- TRUE
                     break
                 }
                 if (jt %in% c("';'", "'{'", "'}'", "'['", "LBB",
-                              "LEFT_ASSIGN", "EQ_ASSIGN")) break
+                              "LEFT_ASSIGN", "EQ_ASSIGN")) {
+                    break
+                }
                 if (jt == "IF") {
                     if_idx <- j
                     break
                 }
             }
-            if (found_function || is.null(if_idx)) next
+            if (found_function || is.null(if_idx)) {
+                next
+            }
 
             # Skip if assignment is inside brackets/parens
-            if (terms$paren_depth[ai] > 0L) next
+            if (terms$paren_depth[ai] > 0L) {
+                next
+            }
 
             # Skip if preceded by ELSE on same line (part of outer chain)
             line_toks_before <- which(terms$out_line == assign_line &
                                       terms$out_order < terms$out_order[ai])
-            if (any(terms$token[line_toks_before] == "ELSE")) next
+            if (any(terms$token[line_toks_before] == "ELSE")) {
+                next
+            }
 
             # Skip if IF is inside unclosed parens relative to assignment
             paren_bal <- 0L
             for (j in seq(ai + 1L, if_idx - 1L)) {
                 jt <- terms$token[j]
-                if (jt == "'('") paren_bal <- paren_bal + 1L
-                if (jt == "')'") paren_bal <- paren_bal - 1L
+                if (jt == "'('") {
+                    paren_bal <- paren_bal + 1L
+                }
+                if (jt == "')'") {
+                    paren_bal <- paren_bal - 1L
+                }
             }
-            if (paren_bal > 0L) next
+            if (paren_bal > 0L) {
+                next
+            }
 
             # Check line_limit (skip short lines when line_limit > 0)
             if (line_limit > 0L &&
                 ast_line_width(terms, assign_line, indent_str) <=
-                line_limit) next
+                line_limit) {
+                next
+            }
 
             # Find condition close paren
             open_idx <- if_idx + 1L
-            if (open_idx > n || terms$token[open_idx] != "'('") next
+            if (open_idx > n || terms$token[open_idx] != "'('") {
+                next
+            }
             depth <- 1L
             close_idx <- open_idx + 1L
             while (close_idx <= n && depth > 0L) {
-                if (terms$token[close_idx] == "'('") depth <- depth + 1L
-                if (terms$token[close_idx] == "')'") depth <- depth - 1L
-                if (depth > 0L) close_idx <- close_idx + 1L
+                if (terms$token[close_idx] == "'('") {
+                    depth <- depth + 1L
+                }
+                if (terms$token[close_idx] == "')'") {
+                    depth <- depth - 1L
+                }
+                if (depth > 0L) {
+                    close_idx <- close_idx + 1L
+                }
             }
-            if (close_idx > n) next
+            if (close_idx > n) {
+                next
+            }
 
             # Must be bare (no brace)
-            if (close_idx + 1L > n) next
-            if (terms$token[close_idx + 1L] == "'{'") next
+            if (close_idx + 1L > n) {
+                next
+            }
+            if (terms$token[close_idx + 1L] == "'{'") {
+                next
+            }
 
             # Find matching ELSE (stop if we exit enclosing parens)
             else_idx <- NULL
@@ -2333,18 +2736,28 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
                     paren_depth <- paren_depth + 2L
                 } else if (st %in% c("')'", "']'")) {
                     paren_depth <- paren_depth - 1L
-                    if (paren_depth < 0L) break
+                    if (paren_depth < 0L) {
+                        break
+                    }
                 } else if (st == "']]'") {
                     paren_depth <- paren_depth - 2L
-                    if (paren_depth < 0L) break
+                    if (paren_depth < 0L) {
+                        break
+                    }
                 }
-                if (st == "'{'") brace_depth <- brace_depth + 1L
-                else if (st == "'}'") {
+                if (st == "'{'") {
+                    brace_depth <- brace_depth + 1L
+                } else
+                if (st == "'}'") {
                     brace_depth <- brace_depth - 1L
-                    if (brace_depth < 0L) break
+                    if (brace_depth < 0L) {
+                        break
+                    }
                 }
-                if (st == "IF") nest_depth <- nest_depth + 1L
-                else if (st == "ELSE") {
+                if (st == "IF") {
+                    nest_depth <- nest_depth + 1L
+                } else
+                if (st == "ELSE") {
                     if (nest_depth == 0L && brace_depth == 0L &&
                         paren_depth == 0L) {
                         else_idx <- search_idx
@@ -2355,15 +2768,23 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
                 }
                 search_idx <- search_idx + 1L
             }
-            if (is.null(else_idx)) next
+            if (is.null(else_idx)) {
+                next
+            }
 
             # Extract true and false ranges
             true_range <- seq(close_idx + 1L, else_idx - 1L)
-            if (length(true_range) == 0L) next
+            if (length(true_range) == 0L) {
+                next
+            }
 
             false_start <- else_idx + 1L
-            if (false_start > n) next
-            if (terms$token[false_start] == "'{'") next
+            if (false_start > n) {
+                next
+            }
+            if (terms$token[false_start] == "'{'") {
+                next
+            }
 
             # Find end of false expression
             false_end <- false_start
@@ -2374,15 +2795,23 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
 
             while (false_end <= n) {
                 ft <- terms$token[false_end]
-                if (ft == "IF" && terms$out_line[false_end] == false_start_line)
-                fif_depth <- fif_depth + 1L
+                if (ft == "IF" &&
+                    terms$out_line[false_end] == false_start_line) {
+                    fif_depth <- fif_depth + 1L
+                }
+
                 if (ft == "ELSE" &&
-                    terms$out_line[false_end] == false_start_line)
-                fif_depth <- max(0L, fif_depth - 1L)
+                    terms$out_line[false_end] == false_start_line) {
+                    fif_depth <- max(0L, fif_depth - 1L)
+                }
 
                 prev_fp <- fp_depth
-                if (ft %in% c("'('", "'['")) fp_depth <- fp_depth + 1L
-                if (ft == "LBB") fp_depth <- fp_depth + 2L
+                if (ft %in% c("'('", "'['")) {
+                    fp_depth <- fp_depth + 1L
+                }
+                if (ft == "LBB") {
+                    fp_depth <- fp_depth + 2L
+                }
                 if (ft %in% c("')'", "']'")) {
                     if (fp_depth == 0L && fb_depth == 0L && fif_depth == 0L) {
                         false_end <- false_end - 1L
@@ -2390,9 +2819,15 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
                     }
                     fp_depth <- fp_depth - 1L
                 }
-                if (ft == "']]'") fp_depth <- fp_depth - 2L
-                if (ft == "'{'") fb_depth <- fb_depth + 1L
-                if (ft == "'}'") fb_depth <- fb_depth - 1L
+                if (ft == "']]'") {
+                    fp_depth <- fp_depth - 2L
+                }
+                if (ft == "'{'") {
+                    fb_depth <- fb_depth + 1L
+                }
+                if (ft == "'}'") {
+                    fb_depth <- fb_depth - 1L
+                }
 
                 if (prev_fp > 0L && fp_depth == 0L &&
                     fb_depth == 0L && fif_depth == 0L) {
@@ -2403,7 +2838,9 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
                                    "GT", "LT")
                     next_ok <- false_end + 1L <= n &&
                     terms$token[false_end + 1L] %in% cont_toks
-                    if (!next_ok) break
+                    if (!next_ok) {
+                        break
+                    }
                     # Continuation confirmed — update start line
                     # so line-boundary check doesn't break on the
                     # continuation operator or its operand
@@ -2418,8 +2855,12 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
                 }
                 false_end <- false_end + 1L
             }
-            if (false_end > n) false_end <- n
-            if (false_end < false_start) next
+            if (false_end > n) {
+                false_end <- n
+            }
+            if (false_end < false_start) {
+                next
+            }
 
             false_range <- seq(false_start, false_end)
 
@@ -2429,30 +2870,40 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
             if (any(true_toks == "FUNCTION") ||
                 any(false_toks == "FUNCTION") ||
                 any(true_toks == "COMMENT") ||
-                any(false_toks == "COMMENT")) next
+                any(false_toks == "COMMENT")) {
+                next
+            }
 
             # Skip multi-line if-else when line_limit > 0
             all_lines <- unique(c(terms$out_line[true_range],
                                   terms$out_line[false_range]))
             spans_lines <- length(all_lines) > 1L ||
             any(all_lines != assign_line)
-            if (spans_lines && line_limit > 0L) next
+            if (spans_lines && line_limit > 0L) {
+                next
+            }
 
             # Skip chained else-if (too complex to restructure)
-            if (terms$token[false_start] == "IF") next
+            if (terms$token[false_start] == "IF") {
+                next
+            }
 
             # --- Restructure ---
             # var_tokens: tokens before the assignment operator on assign_line
             line_toks <- which(terms$out_line == assign_line)
             var_idx <- line_toks[line_toks < ai]
-            if (length(var_idx) == 0L) next
+            if (length(var_idx) == 0L) {
+                next
+            }
 
             # Skip if var tokens contain control flow or braces —
             # the assignment is inside a block and restructuring
             # would break the outer structure
             var_toks <- terms$token[var_idx]
-            if (any(var_toks %in% c("IF", "FOR", "WHILE", "REPEAT",
-                                    "ELSE", "'{'", "'}'", "FUNCTION"))) next
+            if (any(var_toks %in% c("IF", "FOR", "WHILE", "REPEAT", "ELSE",
+                                    "'{'", "'}'", "FUNCTION"))) {
+                next
+            }
 
             # Condition tokens
             cond_range <- seq(open_idx, close_idx)
@@ -2498,8 +2949,9 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
             terms$nesting_level[false_range] <- body_level
 
             # Place trailing tokens on base_line + 4
-            if (length(trailing_idx) > 0L)
-            terms$out_line[trailing_idx] <- base_line + 4L
+            if (length(trailing_idx) > 0L) {
+                terms$out_line[trailing_idx] <- base_line + 4L
+            }
 
             # Move original var + assignment tokens to the true branch
             # (base_line + 1), then duplicate them for the false branch
@@ -2570,12 +3022,18 @@ reformat_inline_if <- function(terms, indent_str = "    ", line_limit = 0L) {
 format_pipeline <- function(code, indent, wrap, expand_if, brace_style,
                             line_limit, function_space = FALSE,
                             control_braces = FALSE) {
-    indent_str <- if (is.numeric(indent)) strrep(" ", indent) else indent
+    if (is.numeric(indent)) {
+        indent_str <- strrep(" ", indent)
+    } else {
+        indent_str <- indent
+    }
 
     # Parse once
     pd <- tryCatch(getParseData(parse(text = code, keep.source = TRUE)),
                    error = function(e) NULL)
-    if (is.null(pd) || nrow(pd) == 0L) return(code)
+    if (is.null(pd) || nrow(pd) == 0L) {
+        return(code)
+    }
 
     orig_lines <- strsplit(code, "\n", fixed = TRUE)[[1]]
     terms <- enrich_terminals(pd, orig_lines)
@@ -2583,34 +3041,53 @@ format_pipeline <- function(code, indent, wrap, expand_if, brace_style,
     # --- AST transforms (single DataFrame, no re-parsing) ---
 
     terms <- collapse_calls(terms, indent_str, line_limit)
-    if (!isFALSE(control_braces))
-    terms <- add_control_braces(terms, control_braces, indent_str, line_limit)
+    if (!isFALSE(control_braces)) {
+        terms <- add_control_braces(terms, control_braces, indent_str,
+                                    line_limit)
+    }
+
     terms <- expand_call_if_args(terms, indent_str, line_limit)
-    if (!isFALSE(control_braces))
-    terms <- add_control_braces(terms, control_braces, indent_str, line_limit)
+    if (!isFALSE(control_braces)) {
+        terms <- add_control_braces(terms, control_braces, indent_str,
+                                    line_limit)
+    }
+
     terms <- wrap_long_operators(terms, indent_str, line_limit)
     terms <- wrap_long_calls(terms, indent_str, wrap, line_limit)
     terms <- reformat_function_defs(terms, indent_str, wrap = wrap,
                                     brace_style = brace_style,
                                     line_limit = line_limit,
                                     function_space = function_space)
-    if (!isFALSE(control_braces))
-    terms <- add_control_braces(terms, control_braces, indent_str, line_limit)
-    if (isTRUE(expand_if))
-    terms <- reformat_inline_if(terms, indent_str, line_limit = 0L)
-    else
-    terms <- reformat_inline_if(terms, indent_str, line_limit = line_limit)
-    if (!isFALSE(control_braces))
-    terms <- add_control_braces(terms, control_braces, indent_str, line_limit)
+    if (!isFALSE(control_braces)) {
+        terms <- add_control_braces(terms, control_braces, indent_str,
+                                    line_limit)
+    }
+
+    if (isTRUE(expand_if)) {
+        terms <- reformat_inline_if(terms, indent_str, line_limit = 0L)
+    } else {
+        terms <- reformat_inline_if(terms, indent_str, line_limit = line_limit)
+    }
+
+    if (!isFALSE(control_braces)) {
+        terms <- add_control_braces(terms, control_braces, indent_str,
+                                    line_limit)
+    }
+
     terms <- expand_call_if_args(terms, indent_str, line_limit)
-    if (!isFALSE(control_braces))
-    terms <- add_control_braces(terms, control_braces, indent_str, line_limit)
+    if (!isFALSE(control_braces)) {
+        terms <- add_control_braces(terms, control_braces, indent_str,
+                                    line_limit)
+    }
+
     terms <- collapse_calls(terms, indent_str, line_limit)
     terms <- wrap_long_operators(terms, indent_str, line_limit)
     terms <- wrap_long_calls(terms, indent_str, wrap, line_limit)
     terms <- wrap_long_operators(terms, indent_str, line_limit)
-    if (!isFALSE(control_braces))
-    terms <- add_control_braces(terms, control_braces, indent_str, line_limit)
+    if (!isFALSE(control_braces)) {
+        terms <- add_control_braces(terms, control_braces, indent_str,
+                                    line_limit)
+    }
 
     serialize_tokens(terms, indent_str, wrap, line_limit)
 }
