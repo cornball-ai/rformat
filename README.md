@@ -1,6 +1,14 @@
 # rformat
 
-Token-based dependency-free R code formatter following R Core style conventions.
+A code formatter for R, built on R's own parser.
+
+`rformat` uses `parse()` and `getParseData()` to make formatting decisions
+from the token stream and expression structure, not from regex or
+indentation heuristics. All transforms operate on an enriched token
+DataFrame in a single pass -- no serialize/re-parse cycles between
+transforms.
+
+No dependencies beyond base R.
 
 ## Installation
 
@@ -13,161 +21,88 @@ remotes::install_github("cornball-ai/rformat")
 ```r
 library(rformat)
 
-# Format a code string
+# Format a string
 rformat("x<-1+2")
 #> x <- 1 + 2
 
-# Format a file
-rformat_file("R/my_script.R")
+# Format a file (overwrites in place)
+rformat_file("script.R")
 
 # Format all R files in a directory
 rformat_dir("R/")
+
+# Dry run
+rformat_file("script.R", dry_run = TRUE)
 ```
+
+## Example
+
+```r
+rformat("f=function(x,y){
+if(x>0)
+y=mean(x,na.rm=TRUE)
+else y=NA
+}")
+```
+
+```r
+f <- function(x, y) {
+    if (x > 0)
+        y <- mean(x, na.rm = TRUE)
+    else y <- NA
+}
+```
+
+## What it does
+
+- Normalizes spacing around operators, commas, and keywords
+- Indents by syntactic nesting depth
+- Converts `=` to `<-` for assignment (where the parser confirms `EQ_ASSIGN`, not `EQ_SUB`)
+- Wraps long lines at logical operators and commas
+- Wraps long function signatures with continuation indent
+- Collapses short multi-line calls back to one line
+- Preserves comments and strings exactly
+- Removes trailing whitespace and excess blank lines
+- Optionally adds braces to bare control-flow bodies
+- Optionally expands inline if-else to multi-line
 
 ## Options
 
-```r
-# Default: 4-space indentation, paren alignment
-rformat(code)
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `indent` | `4L` | Spaces per level, or a string like `"\t"` |
+| `line_limit` | `80L` | Line width before wrapping |
+| `wrap` | `"paren"` | `"paren"` aligns to `(`, `"fixed"` uses 8-space continuation |
+| `brace_style` | `"kr"` | `"kr"`: `){` same line. `"allman"`: `{` on its own line |
+| `control_braces` | `FALSE` | Add braces to bare control-flow bodies |
+| `expand_if` | `FALSE` | Expand all inline if-else to multi-line |
+| `function_space` | `FALSE` | Space before `(` in `function(x)` |
+| `else_same_line` | `TRUE` | Join `}\nelse` to `} else` |
 
-# Custom indentation (2 spaces)
-rformat(code, indent = 2L)
+Defaults are derived from analysis of the 30 packages that ship with R.
 
-# Tab indentation
-rformat(code, indent = "\t")
+## Correctness
 
-# Fixed 8-space continuation (instead of paren alignment)
-rformat(code, wrap = "fixed")
+**Parse preservation.** If input parses, output parses. Token types and
+ordering are preserved. Strings and comments are never modified.
 
-# Allman brace style (opening brace on its own line)
-rformat(code, brace_style = "allman")
+**Semantic preservation.** Only whitespace and style tokens change.
+Assignment conversion and brace insertion are guided by parser token
+types (`EQ_ASSIGN` vs `EQ_SUB`, structural body detection), so they
+never change meaning.
 
-# Expand inline if-else to multi-line
-rformat(code, expand_if = TRUE)
+**Idempotency.** `rformat(rformat(x)) == rformat(x)`. Verified across
+126 CRAN and base R packages with randomized parameter combinations
+(indent, wrap, brace_style, control_braces, line_limit, etc.):
+0 failures, 0 idempotency exceptions.
 
-# Space after function keyword: function (x) instead of function(x)
-rformat(code, function_space = TRUE)
+## Stress testing
 
-# Add braces to bare control flow bodies: if (x) y becomes if (x) { y }
-rformat(code, control_braces = TRUE)
-
-# Preserve } \n else instead of joining to } else {
-rformat(code, else_same_line = FALSE)
-```
-
-## Style
-
-Based on analysis of all 22 packages that ship with R (see `vignette("r-core-style")`). Where R Core is consistent, rformat follows: 4-space indentation, `function(` without a space (96% of source), paren-aligned continuation, arguments on same line. Where R Core is mixed, rformat makes opinionated choices: K&R braces (source is 53/47 K&R vs Allman) and spaces over tabs (source is 89/11).
-
-### Assignment
-
-`=` is converted to `<-` for top-level assignment. Named arguments (`foo(x = 1)`) are not changed. The R source code uses `<-` exclusively.
-
-### Indentation
-
-- 4 spaces per nesting level (configurable via `indent`)
-- Depth-based: braces, parens, and brackets all contribute
-
-### Spacing
-
-- Spaces around binary operators: `x <- 1 + 2`
-- No space before `(` in `function(x, y)` or calls `foo(x)`
-- Space after commas: `c(1, 2, 3)`
-- Space after control flow: `if (`, `for (`, `while (`
-- No space around `::`, `$`, `@`, `:`
-- Trailing whitespace removed
-
-### Control Flow
-
-- Bare bodies are left alone by default (R Core is 59% bare). Use `control_braces = TRUE` to add braces.
-- `} else {` on same line (R Core is 70% same line). Use `else_same_line = FALSE` to preserve `}\nelse`.
-
-### Line Wrapping
-
-Long lines (>80 characters, configurable via `line_limit`) are wrapped:
-
-- At logical operators (`||`, `&&`) first
-- Then at commas in function calls
-- Short multi-line calls are collapsed back to one line when they fit
-
-### Blank Lines
-
-- Multiple consecutive blank lines collapsed to one
-- Blank lines after `{` removed
-
-### Function Definitions
-
-Short signatures stay on one line. Long signatures wrap with continuation indent. Default brace style is K&R (opening brace on same line); use `brace_style = "allman"` for brace on its own line.
-
-```r
-# Short
-lapply <- function(X, FUN, ...) {
-    FUN <- match.fun(FUN)
-    ...
-}
-
-# Long (default: paren alignment)
-lm <- function(formula, data, subset, weights, na.action, method = "qr",
-                model = TRUE, x = FALSE, y = FALSE, qr = TRUE,
-                singular.ok = TRUE, contrasts = NULL, offset, ...) {
-    ...
-}
-
-# Long (wrap = "fixed": 8-space indent)
-lm <- function(formula, data, subset, weights, na.action,
-        method = "qr", model = TRUE, x = FALSE, y = FALSE,
-        qr = TRUE, singular.ok = TRUE, contrasts = NULL, offset, ...) {
-    ...
-}
-```
-
-### Inline If-Else
-
-Preserved by default (R Core compatible). Use `expand_if = TRUE` to expand:
-
-```r
-# Default: preserved
-x <- if (a) b else c
-
-# With expand_if = TRUE
-if (a) {
-    x <- b
-} else {
-    x <- c
-}
-```
-
-## Correctness Guarantees
-
-rformat is designed around three invariants:
-
-1. **Parse preservation.** Formatted output always parses. rformat uses R's own parser (`utils::getParseData()`) for tokenization and verifies output validity. If input parses, output parses.
-
-2. **Semantic preservation.** Formatting changes only whitespace and style tokens. Assignment conversion (`=` to `<-`) and brace insertion are guided by R's parse tree token types (e.g., `EQ_ASSIGN` vs `EQ_SUB`), ensuring they never change meaning.
-
-3. **Idempotency.** Formatting is a fixed point: `rformat(rformat(x)) == rformat(x)`. This is enforced by a stress test suite that formats every file twice and diffs the results. Continuation indentation uses depth-based offsets (matching the initial indentation pass) rather than column-aligned positions, specifically to guarantee stability across passes.
-
-### Conservative Transforms
-
-Structural rewrites (collapsing calls, adding braces, wrapping long lines, reformatting function definitions) are applied conservatively:
-
-- Every transform pass is wrapped in a **parse gate** — if the result doesn't parse, the original is kept.
-- Complex one-liner bodies (containing nested control flow or function literals) are left alone rather than risk mis-association.
-- Code is split into top-level expressions and each is formatted independently, so large files get the same treatment as small ones.
-- Anonymous function literals inside calls are not reformatted — only named function definitions get signature/brace normalization.
-
-### Stress Testing
-
-The [stress test suite](https://github.com/cornball-ai/rformat-lab) formats every `.R` file from 126 CRAN and base R source tarballs, checking:
-
-- **Parse gate**: formatted code must parse without errors
-- **Idempotency**: formatting twice produces identical output
-
-Current results with default `rformat()` options: 0 failures, 2 idempotency exceptions (methods/trace.R and stats/nls.R). Both involve function signatures with complex default values containing inline if-else expressions, where the function definition rewriter flattens defaults to one line but subsequent wrap passes re-wrap them differently. This only affects default values in function signatures — all other formatting is stable. Non-default options (e.g., `control_braces`, non-standard `indent`) may have additional idempotency issues. An AST-based rewrite on the [`ast`](https://github.com/cornball-ai/rformat/tree/ast) branch is expected to resolve these by unifying signature rewriting with line-wrapping in a single pass.
-
-## Philosophy
-
-This formatter follows [tinyverse](https://www.tinyverse.org) principles. The only dependency is `utils::getParseData()` for tokenization.
+The [stress test suite](https://github.com/cornball-ai/rformat-lab)
+formats every `.R` file from 126 packages (base, recommended, and
+popular CRAN), checking that formatted code parses and that formatting
+twice produces identical output. Tests run with randomized style
+parameters to exercise all option combinations.
 
 ## License
 
