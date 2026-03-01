@@ -27,7 +27,7 @@ matches R Core source code where 59\% of control flow bodies are bare.}
 
 \item{expand_if}{Expand inline if-else to multi-line (default FALSE).}
 
-\item{else_same_line}{If TRUE (default), fix `\}\nelse` to `\} else \{` on
+\item{else_same_line}{If TRUE (default), fix `\}\\nelse` to `\} else \{` on
 the same line. Matches R Core source code where 70\% use same-line else.}
 
 \item{function_space}{If TRUE, add space before `(` in function definitions:

@@ -14,7 +14,7 @@
 #'   bodies (e.g., `if (x) y` becomes `if (x) { y }`). Default FALSE
 #'   matches R Core source code where 59% of control flow bodies are bare.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
-#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {` on
+#' @param else_same_line If TRUE (default), fix `}\\nelse` to `} else {` on
 #'   the same line. Matches R Core source code where 70% use same-line else.
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
@@ -78,7 +78,7 @@ rformat <- function(code, indent = 4L, line_limit = 80L, wrap = "paren",
 #' @param control_braces If TRUE, add braces to bare one-line control flow
 #'   bodies. Default FALSE matches R Core majority style.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
-#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
+#' @param else_same_line If TRUE (default), fix `}\\nelse` to `} else {`.
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.
@@ -140,7 +140,7 @@ rformat_file <- function(path, output = NULL, dry_run = FALSE, indent = 4L,
 #' @param control_braces If TRUE, add braces to bare one-line control flow
 #'   bodies. Default FALSE matches R Core majority style.
 #' @param expand_if Expand inline if-else to multi-line (default FALSE).
-#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
+#' @param else_same_line If TRUE (default), fix `}\\nelse` to `} else {`.
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.

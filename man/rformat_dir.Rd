@@ -31,7 +31,7 @@ bodies. Default FALSE matches R Core majority style.}
 
 \item{expand_if}{Expand inline if-else to multi-line (default FALSE).}
 
-\item{else_same_line}{If TRUE (default), fix `\}\nelse` to `\} else \{`.}
+\item{else_same_line}{If TRUE (default), fix `\}\\nelse` to `\} else \{`.}
 
 \item{function_space}{If TRUE, add space before `(` in function definitions:
 `function (x)` instead of `function(x)`. Default FALSE matches 96\% of
