@@ -1,22 +1,22 @@
 % tinyrox says don't edit this manually, but it can't stop you!
 \name{wrap_long_operators}
 \alias{wrap_long_operators}
-\title{Wrap Long Lines at Operators}
+\title{Wrap Long Lines at Operators (AST Version)}
 \usage{
-wrap_long_operators(code, indent = 4L, line_limit = 80L)
+wrap_long_operators(terms, indent_str, line_limit = 80L)
 }
 \arguments{
-\item{code}{Formatted code string.}
+\item{terms}{Enriched terminal DataFrame.}
 
-\item{indent}{Indent size (integer) or string.}
+\item{indent_str}{Indent string.}
 
-\item{line_limit}{Maximum line length (default 80).}
+\item{line_limit}{Maximum line length.}
 }
 \value{
-Code with wrapped long lines.
+Updated DataFrame.
 }
 \description{
-Wraps lines exceeding the line limit at logical operators (`||`, `&&`)
-with continuation aligned to the first operand.
+Finds overlong lines and breaks them after logical operators (`||`, `&&`,
+`|`, `&`). Continuation lines get depth-based indentation.
 }
 \keyword{internal}

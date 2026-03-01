@@ -3,16 +3,9 @@
 \alias{format_tokens}
 \title{Format R Code Using Token-Based Parsing}
 \usage{
-format_tokens(
-  code,
-  indent = 4L,
-  wrap = "paren",
-  expand_if = FALSE,
-  brace_style = "kr",
-  line_limit = 80L,
-  function_space = FALSE,
-  control_braces = FALSE
-)
+format_tokens(code, indent = 4L, wrap = "paren", expand_if = FALSE,
+              brace_style = "kr", line_limit = 80L, function_space = FALSE,
+              control_braces = FALSE)
 }
 \arguments{
 \item{code}{Character string of R code.}

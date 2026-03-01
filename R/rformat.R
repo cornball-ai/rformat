@@ -5,20 +5,20 @@
 #' @param code Character string of R code to format.
 #' @param indent Indentation per level: integer for spaces (default 4), or
 #'   character string for literal indent (e.g., `"\\t\\t"` for vintage R Core style).
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @param wrap Continuation style for long function signatures: `"paren"`
 #'   (default) aligns to opening parenthesis, `"fixed"` uses 8-space indent.
-#' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
-#' @param line_limit Maximum line length before wrapping (default 80).
-#' @param function_space If TRUE, add space before `(` in function definitions:
-#'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
-#'   R Core source code.
 #' @param control_braces If TRUE, add braces to bare one-line control flow
 #'   bodies (e.g., `if (x) y` becomes `if (x) { y }`). Default FALSE
 #'   matches R Core source code where 59% of control flow bodies are bare.
+#' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {` on
 #'   the same line. Matches R Core source code where 70% use same-line else.
+#' @param function_space If TRUE, add space before `(` in function definitions:
+#'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
+#'   R Core source code.
 #' @return Formatted code as a character string.
 #' @export
 #' @examples
@@ -28,10 +28,10 @@
 #' rformat("x <- if (a) b else c", expand_if = TRUE)
 #' # Allman brace style (legacy)
 #' rformat("f <- function(x) { x }", brace_style = "allman")
-rformat <- function(code, indent = 4L, wrap = "paren", expand_if = FALSE,
-                    brace_style = "kr", line_limit = 80L,
-                    function_space = FALSE, control_braces = FALSE,
-                    else_same_line = TRUE) {
+rformat <- function(code, indent = 4L, line_limit = 80L, wrap = "paren",
+                    brace_style = "kr", control_braces = FALSE,
+                    expand_if = FALSE, else_same_line = TRUE,
+                    function_space = FALSE) {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
@@ -70,18 +70,18 @@ rformat <- function(code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' @param dry_run If TRUE, return formatted code without writing.
 #' @param indent Indentation per level: integer for spaces (default 4), or
 #'   character string for literal indent (e.g., `"\\t\\t"` for vintage R Core style).
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @param wrap Continuation style for long function signatures: `"paren"`
 #'   (default) aligns to opening parenthesis, `"fixed"` uses 8-space indent.
-#' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
-#' @param line_limit Maximum line length before wrapping (default 80).
+#' @param control_braces If TRUE, add braces to bare one-line control flow
+#'   bodies. Default FALSE matches R Core majority style.
+#' @param expand_if Expand inline if-else to multi-line (default FALSE).
+#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.
-#' @param control_braces If TRUE, add braces to bare one-line control flow
-#'   bodies. Default FALSE matches R Core majority style.
-#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
 #' @return Invisibly returns formatted code.
 #' @export
 #' @examples
@@ -95,10 +95,10 @@ rformat <- function(code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' readLines(f)
 #' unlink(f)
 rformat_file <- function(path, output = NULL, dry_run = FALSE, indent = 4L,
-                         wrap = "paren", expand_if = FALSE,
-                         brace_style = "kr", line_limit = 80L,
-                         function_space = FALSE, control_braces = FALSE,
-                         else_same_line = TRUE) {
+                         line_limit = 80L, wrap = "paren",
+                         brace_style = "kr", control_braces = FALSE,
+                         expand_if = FALSE, else_same_line = TRUE,
+                         function_space = FALSE) {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
@@ -132,18 +132,18 @@ rformat_file <- function(path, output = NULL, dry_run = FALSE, indent = 4L,
 #' @param dry_run If TRUE, report changes without writing.
 #' @param indent Indentation per level: integer for spaces (default 4), or
 #'   character string for literal indent (e.g., `"\\t\\t"` for vintage R Core style).
+#' @param line_limit Maximum line length before wrapping (default 80).
 #' @param wrap Continuation style for long function signatures: `"paren"`
 #'   (default) aligns to opening parenthesis, `"fixed"` uses 8-space indent.
-#' @param expand_if Expand inline if-else to multi-line (default FALSE).
 #' @param brace_style Brace placement for function definitions: `"kr"` (default)
 #'   puts opening brace on same line as `) {`, `"allman"` puts it on a new line.
-#' @param line_limit Maximum line length before wrapping (default 80).
+#' @param control_braces If TRUE, add braces to bare one-line control flow
+#'   bodies. Default FALSE matches R Core majority style.
+#' @param expand_if Expand inline if-else to multi-line (default FALSE).
+#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
 #' @param function_space If TRUE, add space before `(` in function definitions:
 #'   `function (x)` instead of `function(x)`. Default FALSE matches 96% of
 #'   R Core source code.
-#' @param control_braces If TRUE, add braces to bare one-line control flow
-#'   bodies. Default FALSE matches R Core majority style.
-#' @param else_same_line If TRUE (default), fix `}\nelse` to `} else {`.
 #' @return Invisibly returns vector of modified file paths.
 #' @export
 #' @examples
@@ -157,10 +157,10 @@ rformat_file <- function(path, output = NULL, dry_run = FALSE, indent = 4L,
 #' rformat_dir(d)
 #' unlink(d, recursive = TRUE)
 rformat_dir <- function(path = ".", recursive = TRUE, dry_run = FALSE,
-                        indent = 4L, wrap = "paren", expand_if = FALSE,
-                        brace_style = "kr", line_limit = 80L,
-                        function_space = FALSE, control_braces = FALSE,
-                        else_same_line = TRUE) {
+                        indent = 4L, line_limit = 80L, wrap = "paren",
+                        brace_style = "kr", control_braces = FALSE,
+                        expand_if = FALSE, else_same_line = TRUE,
+                        function_space = FALSE) {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
     }

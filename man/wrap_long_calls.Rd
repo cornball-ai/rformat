@@ -1,24 +1,25 @@
 % tinyrox says don't edit this manually, but it can't stop you!
 \name{wrap_long_calls}
 \alias{wrap_long_calls}
-\title{Wrap Long Function Calls}
+\title{Wrap Long Function Calls at Commas (AST Version)}
 \usage{
-wrap_long_calls(code, wrap = "paren", indent = 4L, line_limit = 80L)
+wrap_long_calls(terms, indent_str, wrap = "paren", line_limit = 80L)
 }
 \arguments{
-\item{code}{Formatted code string.}
+\item{terms}{Enriched terminal DataFrame.}
+
+\item{indent_str}{Indent string.}
 
 \item{wrap}{Continuation style: `"paren"` or `"fixed"`.}
 
-\item{indent}{Indent size (integer) or string.}
-
-\item{line_limit}{Maximum line length (default 80).}
+\item{line_limit}{Maximum line length.}
 }
 \value{
-Code with wrapped long calls.
+Updated DataFrame.
 }
 \description{
-Wraps function call lines that exceed the line limit by breaking at commas.
-Continuation lines are aligned to the opening parenthesis.
+Finds single-line function calls on overlong lines and wraps them at
+commas. Continuation lines get depth-based indentation (or paren-aligned
+if `wrap = "paren"`).
 }
 \keyword{internal}

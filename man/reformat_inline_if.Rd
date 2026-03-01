@@ -1,27 +1,27 @@
 % tinyrox says don't edit this manually, but it can't stop you!
 \name{reformat_inline_if}
 \alias{reformat_inline_if}
-\title{Reformat Inline If-Else Statements}
+\title{Reformat Inline If-Else Assignments (AST Version)}
 \usage{
-reformat_inline_if(code, line_limit = 0L)
+reformat_inline_if(terms, indent_str = "    ", line_limit = 0L)
 }
 \arguments{
-\item{code}{Formatted code string.}
+\item{terms}{Enriched terminal DataFrame.}
 
-\item{line_limit}{Only expand if-else on lines exceeding this limit.
-Use 0 to expand all inline if-else.}
+\item{indent_str}{Indent string.}
+
+\item{line_limit}{Maximum line width. Use 0 to expand all.}
 }
 \value{
-Code with reformatted inline if-else.
+Updated DataFrame.
 }
 \description{
-Expands inline if-else to multi-line format per style guide:
-x <- if (cond) a else b
-becomes:
+Finds `var <- if (cond) true_expr else false_expr` patterns and
+expands them to braced multi-line form with duplicated assignment:
 if (cond) \{
-x <- a
+var <- true_expr
 \} else \{
-x <- b
+var <- false_expr
 \}
 }
 \keyword{internal}
