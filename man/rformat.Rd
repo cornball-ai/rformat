@@ -51,7 +51,7 @@ rformat("if(x>0) y<-1", control_braces = TRUE)
 rformat("x <- if (a) b else c", expand_if = TRUE)
 
 # Wrap long function signatures (default: paren-aligned)
-long_sig <- "f <- function(alpha, beta, gamma, delta, epsilon, zeta, eta, theta) { 1 }"
+long_sig <- "f <- function(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota, kappa) {\n    1\n}"
 cat(rformat(long_sig), sep = "\n")
 
 # Wrap with fixed 8-space continuation indent
