@@ -1,5 +1,6 @@
 # Package-level format options (avoids threading through 15+ call sites)
 .fmt_opts <- new.env(parent = emptyenv())
+
 .fmt_opts$function_space <- FALSE
 
 #' Format R Code Using Token-Based Parsing
@@ -20,10 +21,10 @@
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
-format_tokens <- function (code, indent = 4L, wrap = "paren",
-                           expand_if = FALSE, brace_style = "kr",
-                           line_limit = 80L, function_space = FALSE,
-                           control_braces = FALSE) {
+format_tokens <- function(code, indent = 4L, wrap = "paren",
+                          expand_if = FALSE, brace_style = "kr",
+                          line_limit = 80L, function_space = FALSE,
+                          control_braces = FALSE) {
     .fmt_opts$function_space <- function_space
     # Parse with source tracking
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
@@ -194,7 +195,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
                     # Check the last token from the previous line
                     # (already in the global terminals order)
                     global_idx <- which(terminals$line1 == line_num &
-                        terminals$col1 == line_tokens$col1[ti])
+                                        terminals$col1 == line_tokens$col1[ti])
                     if (length(global_idx) > 0 && global_idx[1] > 1L) {
                         prev_tok <- terminals$token[global_idx[1] - 1L]
                         is_call <- prev_tok == "SYMBOL_FUNCTION_CALL"
@@ -242,9 +243,8 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     for (i in seq_along(chunks)) {
         if (chunks[[i]]$is_expr) {
             parts[i] <- format_pipeline(chunks[[i]]$text, indent, wrap,
-                                            expand_if, brace_style,
-                                            line_limit, function_space,
-                                            control_braces)
+                                        expand_if, brace_style, line_limit,
+                                        function_space, control_braces)
         } else {
             parts[i] <- chunks[[i]]$text
         }
@@ -268,7 +268,7 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
 #'   `line_end_paren`, `line_end_pab` (all integer vectors of length
 #'   `n_lines`).
 #' @keywords internal
-compute_nesting <- function (terminals, n_lines) {
+compute_nesting <- function(terminals, n_lines) {
     brace_depth <- 0L
     paren_depth <- 0L
     paren_at_brace <- integer(0)
@@ -391,7 +391,7 @@ compute_nesting <- function (terminals, n_lines) {
 #' @param break_col Column position to stop at (inclusive).
 #' @return Integer indent level.
 #' @keywords internal
-compute_indent_at_col <- function (nesting, line_toks, line_num, break_col) {
+compute_indent_at_col <- function(nesting, line_toks, line_num, break_col) {
     # Start from state at end of previous line
     if (line_num > 1L) {
         brace_depth <- nesting$line_end_brace[line_num - 1L]
@@ -442,8 +442,8 @@ compute_indent_at_col <- function (nesting, line_toks, line_num, break_col) {
 #' @param prev_prev_token Optional token before prev_token for unary detection.
 #' @return Formatted line content (no leading whitespace).
 #' @keywords internal
-format_line_tokens <- function (tokens, prev_token = NULL,
-                                prev_prev_token = NULL) {
+format_line_tokens <- function(tokens, prev_token = NULL,
+                               prev_prev_token = NULL) {
     if (nrow(tokens) == 0) {
         return("")
     }
@@ -489,7 +489,7 @@ format_line_tokens <- function (tokens, prev_token = NULL,
 #' @param idx Index into `tokens` of the target token.
 #' @return 1-based character position of that token in the formatted output.
 #' @keywords internal
-find_token_pos_in_formatted <- function (tokens, idx) {
+find_token_pos_in_formatted <- function(tokens, idx) {
     pos <- 1L
     prev <- NULL
     prev_prev <- NULL
@@ -529,13 +529,13 @@ find_token_pos_in_formatted <- function (tokens, idx) {
 #' @param orig_lines Original source lines.
 #' @return `terminals` with long `STR_CONST` text restored.
 #' @keywords internal
-restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
+restore_truncated_str_const_tokens <- function(terminals, orig_lines) {
     if (is.null(terminals) || nrow(terminals) == 0) {
         return(terminals)
     }
 
     idx <- which(terminals$token == "STR_CONST" &
-        grepl("^\\[\\d+ chars quoted", terminals$text))
+                 grepl("^\\[\\d+ chars quoted", terminals$text))
     if (length(idx) == 0) {
         return(terminals)
     }
@@ -549,14 +549,12 @@ restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
         } else {
             parts <- c(
                        substring(orig_lines[tok$line1],
-                                 col_to_charpos(orig_lines[tok$line1],
-                        tok$col1)),
+                                 col_to_charpos(orig_lines[tok$line1], tok$col1)),
                 if (tok$line2 > tok$line1 + 1) {
                     orig_lines[(tok$line1 + 1):(tok$line2 - 1)]
                 },
                        substring(orig_lines[tok$line2], 1,
-                                 col_to_charpos(orig_lines[tok$line2],
-                        tok$col2))
+                                 col_to_charpos(orig_lines[tok$line2], tok$col2))
             )
             terminals$text[i] <- paste(parts, collapse = "\n")
         }
@@ -572,7 +570,7 @@ restore_truncated_str_const_tokens <- function (terminals, orig_lines) {
 #' @param prev_prev Token before prev (data frame row or NULL), for unary detection.
 #' @return Logical.
 #' @keywords internal
-needs_space <- function (prev, tok, prev_prev = NULL) {
+needs_space <- function(prev, tok, prev_prev = NULL) {
     p <- prev$token
     t <- tok$token
 
@@ -582,9 +580,9 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
     }
 
     binary_ops <- c("LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB",
-                    "EQ_FORMALS", "AND", "OR", "AND2", "OR2", "GT", "LT", "GE",
-                    "LE", "EQ", "NE", "'+'", "'-'", "'*'", "'/'", "'^'",
-                    "SPECIAL", "'~'")
+                    "EQ_FORMALS", "AND", "OR", "AND2", "OR2", "GT", "LT",
+                    "GE", "LE", "EQ", "NE", "'+'", "'-'", "'*'", "'/'",
+                    "'^'", "SPECIAL", "'~'")
 
     if (p %in% c("'('", "'['", "LBB")) {
         return(FALSE)
@@ -654,12 +652,13 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
             return(FALSE)
         }
         pp <- prev_prev$token
-        unary_context <- c("'('", "'['", "LBB", "','", "'{'", "LEFT_ASSIGN",
-                           "EQ_ASSIGN", "RIGHT_ASSIGN", "EQ_SUB", "EQ_FORMALS",
-                           "AND", "OR", "AND2", "OR2", "GT", "LT", "GE", "LE",
-                           "EQ", "NE", "'+'", "'-'", "'*'", "'/'", "'^'",
-                           "SPECIAL", "'~'", "'!'", "IF", "ELSE", "FOR",
-                           "WHILE", "REPEAT", "IN", "RETURN", "NEXT", "BREAK")
+        unary_context <- c("'('", "'['", "LBB", "','", "'{'",
+                           "LEFT_ASSIGN", "EQ_ASSIGN", "RIGHT_ASSIGN",
+                           "EQ_SUB", "EQ_FORMALS", "AND", "OR", "AND2",
+                           "OR2", "GT", "LT", "GE", "LE", "EQ", "NE",
+                           "'+'", "'-'", "'*'", "'/'", "'^'", "SPECIAL",
+                           "'~'", "'!'", "IF", "ELSE", "FOR", "WHILE",
+                           "REPEAT", "IN", "RETURN", "NEXT", "BREAK")
         if (pp %in% unary_context) {
             return(FALSE)
         }
@@ -698,7 +697,7 @@ needs_space <- function (prev, tok, prev_prev = NULL) {
 #' @param col Tab-expanded column position (1-based).
 #' @return Character position (1-based) in the string.
 #' @keywords internal
-col_to_charpos <- function (line, col) {
+col_to_charpos <- function(line, col) {
     if (!grepl("\t", line, fixed = TRUE)) {
         return(col)
     }
@@ -724,7 +723,7 @@ col_to_charpos <- function (line, col) {
 #' @param line A single line of text.
 #' @return Display width of the line.
 #' @keywords internal
-code_width <- function (line) {
+code_width <- function(line) {
     # Width of the code portion only (excluding trailing comment).
     # Used by wrap passes: don't wrap code just because a trailing
     # comment pushes the line past the limit.
@@ -732,7 +731,7 @@ code_width <- function (line) {
     display_width(code_part)
 }
 
-display_width <- function (line) {
+display_width <- function(line) {
     if (!grepl("\t", line, fixed = TRUE)) {
         return(nchar(line))
     }
@@ -757,7 +756,7 @@ display_width <- function (line) {
 #' @param target_indent Target indentation string for continuation lines.
 #' @return Expression text with first line unindented, continuation lines re-indented.
 #' @keywords internal
-extract_expr_text <- function (lines, tokens, target_indent) {
+extract_expr_text <- function(lines, tokens, target_indent) {
     if (nrow(tokens) == 0) { return("") }
 
     # Get line range
@@ -773,8 +772,7 @@ extract_expr_text <- function (lines, tokens, target_indent) {
     # First line: from first token to end of line
     first_tok <- tokens[tokens$line1 == start_line,][1,]
     first_line_text <- substring(lines[start_line],
-                                 col_to_charpos(lines[start_line],
-            first_tok$col1))
+                                 col_to_charpos(lines[start_line], first_tok$col1))
 
     # Middle lines: full line content, re-indented
     result_lines <- first_line_text
@@ -802,7 +800,7 @@ extract_expr_text <- function (lines, tokens, target_indent) {
 #' @param code Character string of R code.
 #' @return List of `list(text = "...", is_expr = TRUE/FALSE)` pairs.
 #' @keywords internal
-split_toplevel <- function (code) {
+split_toplevel <- function(code) {
     parsed <- tryCatch(parse(text = code, keep.source = TRUE),
                        error = function(e) NULL)
 
@@ -850,14 +848,16 @@ split_toplevel <- function (code) {
         # Gap before this expression
         if (expr_start > prev_end + 1L) {
             gap_lines <- lines[(prev_end + 1L):(expr_start - 1L)]
-            chunks[[length(chunks) + 1L]] <- list(
-                text = paste(gap_lines, collapse = "\n"), is_expr = FALSE)
+            chunks[[length(chunks) + 1L]] <- list(text = paste(gap_lines,
+                    collapse = "\n"),
+                is_expr = FALSE)
         }
 
         # The expression itself
         expr_lines <- lines[expr_start:expr_end]
-        chunks[[length(chunks) + 1L]] <- list(
-            text = paste(expr_lines, collapse = "\n"), is_expr = TRUE)
+        chunks[[length(chunks) + 1L]] <- list(text = paste(expr_lines,
+                collapse = "\n"),
+            is_expr = TRUE)
 
         prev_end <- expr_end
     }
@@ -865,8 +865,9 @@ split_toplevel <- function (code) {
     # Trailing gap after last expression
     if (prev_end < n_lines) {
         gap_lines <- lines[(prev_end + 1L):n_lines]
-        chunks[[length(chunks) + 1L]] <- list(
-            text = paste(gap_lines, collapse = "\n"), is_expr = FALSE)
+        chunks[[length(chunks) + 1L]] <- list(text = paste(gap_lines,
+                collapse = "\n"),
+            is_expr = FALSE)
     }
 
     chunks
@@ -879,7 +880,7 @@ split_toplevel <- function (code) {
 #' @param code Code string.
 #' @return Code with normalized blank lines.
 #' @keywords internal
-format_blank_lines <- function (code) {
+format_blank_lines <- function(code) {
     # Remove trailing whitespace from each line
     code <- gsub(" +\n", "\n", code)
     # Remove blank lines after opening brace
@@ -898,10 +899,11 @@ format_blank_lines <- function (code) {
 #' @param code Code string.
 #' @return Code with corrected else placement.
 #' @keywords internal
-fix_else_placement <- function (code) {
+fix_else_placement <- function(code) {
     # Join } else (possibly with blank/comment lines between)
     # Handle } possibly followed by ]], ], ) before newline
     code <- gsub("(\\}[])]*[ \t]*)\n([ \t]*(#[^\n]*)?\n)*[ \t]*else\\b",
                  "\\1 else", code)
     code
 }
+

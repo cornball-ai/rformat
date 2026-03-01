@@ -28,10 +28,10 @@
 #' rformat("x <- if (a) b else c", expand_if = TRUE)
 #' # Allman brace style (legacy)
 #' rformat("f <- function(x) { x }", brace_style = "allman")
-rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
-                     brace_style = "kr", line_limit = 80L,
-                     function_space = FALSE, control_braces = FALSE,
-                     else_same_line = TRUE) {
+rformat <- function(code, indent = 4L, wrap = "paren", expand_if = FALSE,
+                    brace_style = "kr", line_limit = 80L,
+                    function_space = FALSE, control_braces = FALSE,
+                    else_same_line = TRUE) {
     if (!is.character(code)) {
         stop("`code` must be a character string")
     }
@@ -54,9 +54,8 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
     formatted <- format_blank_lines(formatted)
     # Fix } else if formatter broke valid input
     if (parsed_ok) {
-        out_ok <- !is.null(tryCatch(
-            parse(text = formatted, keep.source = TRUE),
-            error = function(e) NULL))
+        out_ok <- !is.null(tryCatch(parse(text = formatted, keep.source = TRUE),
+                                    error = function(e) NULL))
         if (!out_ok) formatted <- fix_else_placement(formatted)
     }
     formatted
@@ -95,11 +94,11 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
 #' rformat_file(f)
 #' readLines(f)
 #' unlink(f)
-rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
-                          wrap = "paren", expand_if = FALSE,
-                          brace_style = "kr", line_limit = 80L,
-                          function_space = FALSE, control_braces = FALSE,
-                          else_same_line = TRUE) {
+rformat_file <- function(path, output = NULL, dry_run = FALSE, indent = 4L,
+                         wrap = "paren", expand_if = FALSE,
+                         brace_style = "kr", line_limit = 80L,
+                         function_space = FALSE, control_braces = FALSE,
+                         else_same_line = TRUE) {
     if (!file.exists(path)) {
         stop("File not found: ", path)
     }
@@ -157,11 +156,11 @@ rformat_file <- function (path, output = NULL, dry_run = FALSE, indent = 4L,
 #' # Format and overwrite
 #' rformat_dir(d)
 #' unlink(d, recursive = TRUE)
-rformat_dir <- function (path = ".", recursive = TRUE, dry_run = FALSE,
-                         indent = 4L, wrap = "paren", expand_if = FALSE,
-                         brace_style = "kr", line_limit = 80L,
-                         function_space = FALSE, control_braces = FALSE,
-                         else_same_line = TRUE) {
+rformat_dir <- function(path = ".", recursive = TRUE, dry_run = FALSE,
+                        indent = 4L, wrap = "paren", expand_if = FALSE,
+                        brace_style = "kr", line_limit = 80L,
+                        function_space = FALSE, control_braces = FALSE,
+                        else_same_line = TRUE) {
     if (!dir.exists(path)) {
         stop("Directory not found: ", path)
     }

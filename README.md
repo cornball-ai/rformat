@@ -1,12 +1,11 @@
 # rformat
 
-A code formatter for R, built on R's own parser.
+A code formatter for R, built on R's parser, written in base R.
 
 `rformat` uses `parse()` and `getParseData()` to make formatting decisions
 from the token stream and expression structure, not from regex or
 indentation heuristics. All transforms operate on an enriched token
-DataFrame in a single pass -- no serialize/re-parse cycles between
-transforms.
+DataFrame.
 
 No dependencies beyond base R.
 
@@ -76,10 +75,10 @@ f <- function(x, y) {
 | `brace_style` | `"kr"` | `"kr"`: `){` same line. `"allman"`: `{` on its own line |
 | `control_braces` | `FALSE` | Add braces to bare control-flow bodies |
 | `expand_if` | `FALSE` | Expand all inline if-else to multi-line |
-| `function_space` | `FALSE` | Space before `(` in `function(x)` |
 | `else_same_line` | `TRUE` | Join `}\nelse` to `} else` |
+| `function_space` | `FALSE` | Space before `(` in `function(x)` |
 
-Defaults are derived from analysis of the 30 packages that ship with R.
+Defaults are derived from [analysis](https://github.com/cornball-ai/rformat-lab/) of the 30 packages that ship with R.
 
 ## Correctness
 
