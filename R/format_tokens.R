@@ -242,8 +242,9 @@ format_tokens <- function (code, indent = 4L, wrap = "paren",
     for (i in seq_along(chunks)) {
         if (chunks[[i]]$is_expr) {
             parts[i] <- format_pipeline(chunks[[i]]$text, indent, wrap,
-                                        expand_if, brace_style, line_limit,
-                                        function_space, control_braces)
+                                            expand_if, brace_style,
+                                            line_limit, function_space,
+                                            control_braces)
         } else {
             parts[i] <- chunks[[i]]$text
         }
@@ -871,83 +872,6 @@ split_toplevel <- function (code) {
     chunks
 }
 
-#' Apply Formatting Pipeline to a Code Fragment
-#'
-#' Runs collapse, brace, wrap, function-def, and inline-if passes on a
-#' single code string. Designed to operate on individual top-level
-#' expressions so each gets the full iteration budget.
-#'
-#' @param code Character string of R code.
-#' @param indent Indent size or string.
-#' @param wrap Continuation style.
-#' @param expand_if Expand inline if-else.
-#' @param brace_style Brace placement style.
-#' @param line_limit Maximum line length.
-#' @param function_space If TRUE, add space before `(` in function definitions.
-#' @param control_braces If TRUE, add braces to bare one-line control flow bodies.
-#' @return Formatted code string.
-#' @keywords internal
-format_pipeline <- function (code, indent, wrap, expand_if, brace_style,
-                             line_limit, function_space = FALSE,
-                             control_braces = FALSE) {
-    # Collapse multi-line calls that fit on one line
-    code <- apply_if_parseable(code, collapse_calls)
-
-    # Add braces to one-liner control flow (before wrapping, so bare
-    # bodies move to their own lines before line-length decisions)
-    if (control_braces) {
-        code <- apply_if_parseable(code, add_control_braces)
-    }
-
-    # Expand bare if-else arguments in overlong calls before wrapping,
-    # so the braced form is stable and wrap passes see clean lines
-    code <- apply_if_parseable(code, expand_call_if_args,
-                               line_limit = line_limit)
-
-    # Wrap long lines at operators (||, &&), then at commas
-    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
-                               line_limit = line_limit)
-    code <- apply_if_parseable(code, wrap_long_calls, wrap = wrap,
-                               indent = indent, line_limit = line_limit)
-
-    # Reformat function definitions
-    code <- apply_if_parseable(code, reformat_function_defs, wrap = wrap,
-                               brace_style = brace_style,
-                               line_limit = line_limit,
-                               function_space = function_space)
-    # Function-def rewrites can expose bare one-line control flow.
-    if (control_braces) {
-        code <- apply_if_parseable(code, add_control_braces)
-    }
-
-    # Reformat inline if-else to multi-line
-    # Always expand long lines; optionally expand all
-    code <- apply_if_parseable(code, reformat_inline_if, line_limit = if (expand_if) {
-            0L
-        } else {
-            line_limit
-        })
-    # Inline-if expansion can expose new bare control flow
-    if (control_braces) {
-        code <- apply_if_parseable(code, add_control_braces)
-    }
-
-    # Final expansion of bare if-else call args
-    code <- apply_if_parseable(code, expand_call_if_args,
-                               line_limit = line_limit)
-
-    # Final wrap pass: earlier passes may have produced new long lines.
-    # Operator wrap runs both before and after call wrap because call
-    # wrapping can leave operator+comment tails that exceed the limit.
-    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
-                               line_limit = line_limit)
-    code <- apply_if_parseable(code, wrap_long_calls, wrap = wrap,
-                               indent = indent, line_limit = line_limit)
-    code <- apply_if_parseable(code, wrap_long_operators, indent = indent,
-                               line_limit = line_limit)
-    code
-}
-
 #' Format Blank Lines
 #'
 #' Normalize blank lines between code blocks.
@@ -967,34 +891,17 @@ format_blank_lines <- function (code) {
     code
 }
 
-#' Parse Gate for Transform Passes
+#' Fix Else Placement
+#'
+#' Ensures `else` appears on the same line as the closing brace.
 #'
 #' @param code Code string.
-#' @return TRUE if code parses, FALSE otherwise.
+#' @return Code with corrected else placement.
 #' @keywords internal
-is_parseable_code <- function (code) {
-    !is.null(tryCatch(parse(text = code, keep.source = TRUE),
-                      error = function(e) NULL))
+fix_else_placement <- function (code) {
+    # Join } else (possibly with blank/comment lines between)
+    # Handle } possibly followed by ]], ], ) before newline
+    code <- gsub("(\\}[])]*[ \t]*)\n([ \t]*(#[^\n]*)?\n)*[ \t]*else\\b",
+                 "\\1 else", code)
+    code
 }
-
-#' Apply Transform Only If Output Parses
-#'
-#' @param code Code string.
-#' @param fn Transform function taking `code` as first argument.
-#' @param ... Additional arguments passed to `fn`.
-#' @return Transformed code if parseable, otherwise original code.
-#' @keywords internal
-apply_if_parseable <- function (code, fn, ...) {
-    updated <- tryCatch(fn(code, ...), error = function(e) code)
-
-    if (!is.character(updated) || length(updated) != 1L) {
-        return(code)
-    }
-
-    if (!identical(updated, code) && !is_parseable_code(updated)) {
-        return(code)
-    }
-
-    updated
-}
-

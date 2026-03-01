@@ -108,6 +108,52 @@ R's `getParseData()` column positions (`col1`, `col2`) have two behaviors:
 
 This means `substring()` with `col1`/`col2` is **wrong** when the line contains tabs. Use the `col_to_charpos()` helper to convert tab-expanded columns to character positions, and `display_width()` for tab-expanded line lengths.
 
+## Stress Test Bug-Squashing Routine
+
+All 126 stress test packages are pre-extracted at `~/.cache/rformat_cran_src/extracted/<pkg>/R/`. Use `~/rformat-lab/extract_packages.sh` to re-extract if needed.
+
+### Scripts
+
+- `~/rformat-lab/stress_test.R` — per-package stress test (random params per file)
+- `~/rformat-lab/stress_one_combo.R` — test one file with one combo index (for parallel)
+- `/tmp/debug_fails.R` — show parse error context for a file+params
+
+### Routine
+
+1. **Fix FAILs** — test only on failing files:
+   ```bash
+   # Reproduce failures (parallel by file x combo)
+   parallel -j8 --colsep ' ' r /tmp/debug_fails.R {1} {2} {3} {4} {5} {6} {7} {8} {9} :::: /tmp/fail_jobs.txt 2>/dev/null
+   ```
+
+2. **Fix IDEMPs** — test only on failing files (same pattern).
+
+3. **Test on bottom 63 packages** (fastest half):
+   ```bash
+   cd ~/rformat-lab && tail -63 stress_timing.csv | cut -d, -f1 | tr -d '"' | parallel -j16 --timeout 300 r stress_test.R {} 2>/dev/null | grep -E "FAIL|IDEMP|_DONE_"
+   ```
+
+4. **Return to 1** if any FAILs or IDEMPs.
+
+5. **Full 126-package stress test**:
+   ```bash
+   cd ~/rformat-lab && r -e 'cat(read.csv("stress_timing.csv")$package, sep="\n")' | parallel -j16 --timeout 900 r stress_test.R {} 2>/dev/null | grep -E "FAIL|IDEMP|_DONE_"
+   ```
+
+6. **Return to 1** if needed.
+
+7. **Success** — 0 FAIL, 0 IDEMP across all 126 packages.
+
+### Test coverage rule
+
+Every FAIL or IDEMP fix **must** have a corresponding test in `inst/tinytest/test_ast.R` or `inst/tinytest/test_rformat.R` that reproduces the bug pattern. This prevents regressions when future changes are made.
+
+### Testing specific files with all 10 strategic combos
+
+```bash
+cd ~/rformat-lab && parallel -j10 --timeout 120 r stress_one_combo.R {1} {2} ::: /path/to/file.R ::: $(seq 1 10) 2>/dev/null
+```
+
 ## Package Development
 
 - Explicit namespaces required for external functions
