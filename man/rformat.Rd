@@ -41,10 +41,22 @@ Formatted code as a character string.
 Format R code string according to base R style conventions.
 }
 \examples{
+# Basic formatting: spacing around operators
 rformat("x<-1+2")
-rformat("if(x>0){y<-1}")
-# Expand inline if-else
+
+# Add braces to bare control-flow bodies
+rformat("if(x>0) y<-1", control_braces = TRUE)
+
+# Expand inline if-else to multi-line
 rformat("x <- if (a) b else c", expand_if = TRUE)
-# Allman brace style (legacy)
+
+# Wrap long function signatures (default: paren-aligned)
+long_sig <- "f <- function(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota, kappa) {\n    1\n}"
+cat(rformat(long_sig), sep = "\n")
+
+# Wrap with fixed 8-space continuation indent
+cat(rformat(long_sig, wrap = "fixed"), sep = "\n")
+
+# Allman brace style
 rformat("f <- function(x) { x }", brace_style = "allman")
 }

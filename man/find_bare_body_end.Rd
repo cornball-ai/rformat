@@ -8,10 +8,10 @@ find_bare_body_end(terms, body_start)
 \arguments{
 \item{terms}{Enriched terminal DataFrame.}
 
-\item{body_range}{Integer vector of row indices for the body.}
+\item{body_start}{Integer row index where the bare body begins.}
 }
 \value{
-TRUE if the body is a complete, self-contained statement.
+Integer row index of the last token in the bare body.
 }
 \description{
 Returns FALSE if the body has unclosed parens/brackets or ends

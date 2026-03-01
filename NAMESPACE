@@ -4,4 +4,5 @@ export(rformat)
 export(rformat_dir)
 export(rformat_file)
 
+importFrom(stats,setNames)
 importFrom(utils,getParseData)
