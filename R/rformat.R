@@ -51,7 +51,15 @@ rformat <- function (code, indent = 4L, wrap = "paren", expand_if = FALSE,
                                function_space = function_space,
                                control_braces = control_braces)
 
-    format_blank_lines(formatted)
+    formatted <- format_blank_lines(formatted)
+    # Fix } else if formatter broke valid input
+    if (parsed_ok) {
+        out_ok <- !is.null(tryCatch(
+            parse(text = formatted, keep.source = TRUE),
+            error = function(e) NULL))
+        if (!out_ok) formatted <- fix_else_placement(formatted)
+    }
+    formatted
 }
 
 #' Format R File

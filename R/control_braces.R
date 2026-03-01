@@ -6,7 +6,11 @@
 #' @return Code with corrected else placement.
 #' @keywords internal
 fix_else_placement <- function (code) {
-    gsub("\\}\\s*\n\\s*else\\b", "} else", code)
+    # Join } else (possibly with blank/comment lines between)
+    # Handle } possibly followed by ]], ], ) before newline
+    code <- gsub("(\\}[])]*[ \t]*)\n([ \t]*(#[^\n]*)?\n)*[ \t]*else\\b",
+                 "\\1 else", code)
+    code
 }
 
 #' Add Braces to One-Liner Control Flow

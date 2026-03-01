@@ -183,3 +183,104 @@ idemp_test <- function(code, desc) {
 idemp_test("f <- function(x, y) {\n    x + y\n}\n", "short funcdef idemp")
 idemp_test(long_func, "long funcdef idemp")
 idemp_test(ifelse_func, "if-else default idemp")
+
+# Multi-line string followed by ) should not insert blank line on re-format
+# Regression: serialize_tokens didn't account for multi-line string tokens
+# consuming extra output lines, causing blank line gap before )
+str_paren <- 'ui_todo(\'
+      line1
+      \'
+)'
+out1 <- rformat(str_paren)
+out2 <- rformat(out1)
+expect_identical(out1, out2, info = "multi-line string ) placement idempotent")
+expect_false(grepl("\n\n\\)", out1),
+    info = "no blank line before ) after multi-line string")
+
+# Collapse after braces: wrapping should be stable when control_braces
+# adds indent that pushes a call near line_limit
+# Regression: collapse ran only before braces, so calls collapsed before
+# indent increase were later wrapped; second pass had braces already and
+# collapsed them back
+brace_collapse <- 'f <- function() {
+    for (i in seq_len(n)) {
+        for (j in seq_len(m)) {
+            if (cond) {
+                a <- 1
+            } else {
+                if (is.factor(y)) predicted <- factor(as.character(predicted), levels = lev)
+            }
+        }
+    }
+}'
+out1 <- rformat(brace_collapse, control_braces = "next_line", indent = 8L,
+    line_limit = 100L, brace_style = "allman", function_space = TRUE,
+    else_same_line = FALSE)
+out2 <- rformat(out1, control_braces = "next_line", indent = 8L,
+    line_limit = 100L, brace_style = "allman", function_space = TRUE,
+    else_same_line = FALSE)
+expect_identical(out1, out2,
+    info = "collapse after braces idempotent near line_limit")
+
+# Bare if-else body in next_line mode: find_bare_body_end must include
+# the else clause when the body is an if-else chain
+# Regression: ELSE token was not excluded from statement-end check,
+# so find_bare_body_end returned at ELSE, cutting off the else body
+bare_ifelse <- 'f <- function() {
+    if (plot.it)
+        if (datax)
+            plot(y, x)
+        else
+            plot(x, y)
+    invisible(x)
+}'
+out <- rformat(bare_ifelse, control_braces = "next_line", indent = 2L)
+expect_true(!is.null(tryCatch(parse(text = out), error = function(e) NULL)),
+    info = "bare if-else body bracing parses correctly")
+expect_true(grepl("\\} else", out) || grepl("if \\(datax\\)", out),
+    info = "else clause preserved in braced if-else body")
+
+# Empty function body {} should not get split across lines
+# Regression: reformat_function_defs_ast moved { but left } on original line
+empty_body <- 'if (cond) {
+.f <- function(x, y, z, a = 1, b = 2, c = 3, d = 4) {}
+}'
+out <- rformat(empty_body, brace_style = "allman", wrap = "fixed",
+    line_limit = 60L)
+expect_true(!is.null(tryCatch(parse(text = out), error = function(e) NULL)),
+    info = "empty function body {} parses after wrapping")
+
+# Function body { on next line must be included in bare body range
+# Regression: { was not in cont_starts, so find_bare_body_end returned
+# at ) of function params, cutting off the function body
+bare_func_body <- 'if (FALSE)
+f <- function(x, y, z)
+{
+    x + y + z
+}'
+out <- rformat(bare_func_body, control_braces = "next_line", indent = 4L)
+expect_true(!is.null(tryCatch(parse(text = out), error = function(e) NULL)),
+    info = "function body { included in bare body range")
+
+# Comment between assignment and value should not end the statement
+# Regression: COMMENT token at balanced depth triggered statement-end check
+comment_assign <- 'if (cond) {
+    adjust <-
+    ## comment here
+    if (x) "a" else "b"
+}'
+out <- rformat(comment_assign, control_braces = "next_line", indent = 4L)
+expect_true(!is.null(tryCatch(parse(text = out), error = function(e) NULL)),
+    info = "comment between <- and value preserved in bare body")
+
+# Comment after else keyword should not end the statement
+# Regression: else+comment with body on next line was cut off
+else_comment <- 'if (cond) {
+    adjust <-
+    if (x) "a"
+    else # a comment
+    "b"
+}'
+out <- rformat(else_comment, control_braces = "next_line", indent = 2L)
+expect_true(!is.null(tryCatch(parse(text = out), error = function(e) NULL)),
+    info = "comment after else does not break body detection")
