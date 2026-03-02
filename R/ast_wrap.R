@@ -447,8 +447,8 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             if (last_offset > 0L) {
                 trailing <- line_idx[
                     terms$out_order[line_idx] >
-                        terms$out_order[close_idx] &
-                        !line_idx %in% all_call_idx]
+                    terms$out_order[close_idx] &
+                    !line_idx %in% all_call_idx]
                 terms$out_line[trailing] <-
                 call_line + last_offset
             }
@@ -462,3 +462,4 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
     terms
 }
+

@@ -75,7 +75,7 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
             close_line_toks <- line_index_get(lidx, close_line)
             suffix_idx <- close_line_toks[
                 terms$out_order[close_line_toks] >
-                    terms$out_order[close_idx]]
+                terms$out_order[close_idx]]
             if (length(suffix_idx) > 0L) {
                 suffix_toks <- terms$token[suffix_idx]
                 # Determine which suffix tokens to keep.
@@ -142,8 +142,8 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
             # Remaining tokens on close_line (not in call or suffix)
             remaining_close <- close_line_toks[
                 terms$out_order[close_line_toks] >
-                    terms$out_order[close_idx] &
-                    !close_line_toks %in% suffix_idx]
+                terms$out_order[close_idx] &
+                !close_line_toks %in% suffix_idx]
 
             # If there are remaining tokens, check if everything
             # (call + suffix + remaining) would fit on one line.
@@ -202,3 +202,4 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
 
     terms
 }
+
