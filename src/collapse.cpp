@@ -10,6 +10,8 @@ void collapse_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
 
         reorder_tokens(tokens);
         int n = static_cast<int>(tokens.size());
+        LineIndex lidx;
+        lidx.build(tokens);
 
         for (int ci = 0; ci < n; ci++) {
             if (!tok_in(tokens[ci].token,
@@ -37,12 +39,12 @@ void collapse_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
 
             // Collect call range and suffix tokens
             // Suffix: tokens after ) on close_line
+            const std::vector<int>& close_line_toks = lidx.get(close_line);
             std::vector<int> suffix_idx;
-            for (int k = close_idx + 1; k < n; k++) {
-                if (tokens[k].out_line != close_line) break;
-                if (tokens[k].out_order <= tokens[close_idx].out_order)
-                    continue;
-                suffix_idx.push_back(k);
+            for (int k : close_line_toks) {
+                if (tokens[k].out_order > tokens[close_idx].out_order) {
+                    suffix_idx.push_back(k);
+                }
             }
 
             // Filter suffix: keep only continuation tokens
@@ -97,8 +99,7 @@ void collapse_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
 
             // Remaining tokens on close_line (not in call or suffix)
             std::vector<int> remaining_close;
-            for (int k = 0; k < n; k++) {
-                if (tokens[k].out_line != close_line) continue;
+            for (int k : close_line_toks) {
                 if (tokens[k].out_order <= tokens[close_idx].out_order)
                     continue;
                 // Check not in suffix
@@ -122,7 +123,10 @@ void collapse_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                     saved[j] = tokens[all_check[j]].out_line;
                     tokens[all_check[j]].out_line = open_line;
                 }
-                bool too_wide = ast_line_width(tokens, open_line,
+                // Rebuild index for the trial width check
+                LineIndex trial;
+                trial.build(tokens);
+                bool too_wide = trial.width(tokens, open_line,
                     opts.indent_str, opts.function_space) > opts.line_limit;
                 for (size_t j = 0; j < all_check.size(); j++) {
                     tokens[all_check[j]].out_line = saved[j];
@@ -142,10 +146,11 @@ void collapse_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                 tokens[all_move[j]].out_line = open_line;
             }
 
-            // Never collapse to overlong lines: causes IDEMP when
-            // wrap_long_calls re-wraps differently on the next pass.
-            if (ast_line_width(tokens, open_line, opts.indent_str,
-                               opts.function_space) > opts.line_limit) {
+            // Never collapse to overlong lines
+            LineIndex check;
+            check.build(tokens);
+            if (check.width(tokens, open_line, opts.indent_str,
+                            opts.function_space) > opts.line_limit) {
                 for (size_t j = 0; j < all_move.size(); j++) {
                     tokens[all_move[j]].out_line = saved_lines[j];
                 }
@@ -154,7 +159,7 @@ void collapse_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
 
             // Handle remaining tokens on close_line
             std::vector<int> still_on_close;
-            for (int k = 0; k < n; k++) {
+            for (int k : close_line_toks) {
                 if (tokens[k].out_line == close_line) {
                     still_on_close.push_back(k);
                 }

@@ -18,6 +18,8 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
         changed <- FALSE
 
         terms <- terms[order(terms$out_line, terms$out_order),]
+        terms$out_order <- seq_len(nrow(terms))
+        lidx <- build_line_index(terms)
         target <- c("SYMBOL_FUNCTION_CALL", "IF", "FOR", "WHILE")
         target_idx <- which(terms$token %in% target)
 
@@ -70,16 +72,13 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
             call_range <- seq(ci, close_idx)
 
             # Also identify suffix tokens (after ) on close line)
-            # Only move closing brackets/parens, commas, operators, and
-            # comments — not new expressions that happen to be on the
-            # same line
-            suffix_idx <- which(terms$out_line == close_line &
-                                terms$out_order > terms$out_order[close_idx])
+            close_line_toks <- line_index_get(lidx, close_line)
+            suffix_idx <- close_line_toks[
+                terms$out_order[close_line_toks] >
+                    terms$out_order[close_idx]]
             if (length(suffix_idx) > 0L) {
                 suffix_toks <- terms$token[suffix_idx]
                 # Determine which suffix tokens to keep.
-                # Walk through and stop at first token that starts
-                # a new, independent expression.
                 n_suffix <- length(suffix_idx)
                 keep_count <- 0L
                 si <- 1L
@@ -140,22 +139,23 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
 
             }
 
-            # Identify remaining tokens on close_line that won't
-            # move (e.g. IF body after condition collapse)
-            remaining_close <- which(terms$out_line == close_line &
-                                     terms$out_order > terms$out_order[close_idx] &
-                                     !seq_len(nrow(terms)) %in% suffix_idx)
+            # Remaining tokens on close_line (not in call or suffix)
+            remaining_close <- close_line_toks[
+                terms$out_order[close_line_toks] >
+                    terms$out_order[close_idx] &
+                    !close_line_toks %in% suffix_idx]
 
             # If there are remaining tokens, check if everything
             # (call + suffix + remaining) would fit on one line.
-            # If not, skip collapse to avoid oscillation.
             if (length(remaining_close) > 0L) {
                 all_check <- c(call_range,
                     if (length(suffix_idx) > 0L) suffix_idx,
                                remaining_close)
                 saved_check <- terms$out_line[all_check]
                 terms$out_line[all_check] <- open_line
-                too_wide <- ast_line_width(terms, open_line,
+                # Rebuild index for trial width check
+                trial_lidx <- build_line_index(terms)
+                too_wide <- line_index_width(terms, trial_lidx, open_line,
                     indent_str) > line_limit
                 terms$out_line[all_check] <- saved_check
                 if (too_wide) {
@@ -170,7 +170,9 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
 
             # Never collapse to overlong lines: causes IDEMP when
             # wrap_long_calls re-wraps differently on the next pass.
-            if (ast_line_width(terms, open_line, indent_str) > line_limit) {
+            check_lidx <- build_line_index(terms)
+            if (line_index_width(terms, check_lidx, open_line,
+                                 indent_str) > line_limit) {
                 terms$out_line[all_move] <- saved_lines
                 next
             }
@@ -200,4 +202,3 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
 
     terms
 }
-

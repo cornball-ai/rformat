@@ -83,6 +83,37 @@ inline int find_matching_brace(const std::vector<Token>& tokens,
     return (i < n) ? i : -1;
 }
 
+// Line index: maps line number -> sorted vector of token indices
+// Avoids O(n) scans for "find all tokens on line X"
+struct LineIndex {
+    std::vector<std::vector<int>> lines; // lines[line_num] = {tok_idx...}
+
+    void build(const std::vector<Token>& tokens) {
+        int max_line = 0;
+        for (const auto& t : tokens) {
+            if (t.out_line > max_line) max_line = t.out_line;
+        }
+        lines.assign(max_line + 2, std::vector<int>());
+        int n = static_cast<int>(tokens.size());
+        for (int i = 0; i < n; i++) {
+            int ln = tokens[i].out_line;
+            if (ln >= 0 && ln < static_cast<int>(lines.size())) {
+                lines[ln].push_back(i);
+            }
+        }
+    }
+
+    const std::vector<int>& get(int line_num) const {
+        static const std::vector<int> empty;
+        if (line_num < 0 || line_num >= static_cast<int>(lines.size()))
+            return empty;
+        return lines[line_num];
+    }
+
+    int width(const std::vector<Token>& tokens, int line_num,
+              const std::string& indent_str, bool function_space) const;
+};
+
 // Forward declarations - helpers.cpp
 bool needs_space(const Token& prev, const Token& tok,
                  const Token* prev_prev, bool function_space);

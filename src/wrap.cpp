@@ -10,21 +10,19 @@ void wrap_long_operators(std::vector<Token>& tokens, const FormatOptions& opts) 
         changed = false;
         reorder_tokens(tokens);
         int n = static_cast<int>(tokens.size());
+        LineIndex lidx;
+        lidx.build(tokens);
 
         // Collect unique out_lines
         std::set<int> out_lines_set;
         for (const auto& t : tokens) out_lines_set.insert(t.out_line);
 
         for (int ln : out_lines_set) {
-            int width = ast_line_width(tokens, ln, opts.indent_str,
-                                       opts.function_space);
+            int width = lidx.width(tokens, ln, opts.indent_str,
+                                   opts.function_space);
             if (width <= opts.line_limit) continue;
 
-            // Get line tokens
-            std::vector<int> idx;
-            for (int i = 0; i < n; i++) {
-                if (tokens[i].out_line == ln) idx.push_back(i);
-            }
+            const std::vector<int>& idx = lidx.get(ln);
             if (idx.empty()) continue;
 
             // Skip semicolons
@@ -92,6 +90,8 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
         changed = false;
         reorder_tokens(tokens);
         int n = static_cast<int>(tokens.size());
+        LineIndex lidx;
+        lidx.build(tokens);
 
         for (int ci = 0; ci < n; ci++) {
             if (tokens[ci].token != "SYMBOL_FUNCTION_CALL") continue;
@@ -100,8 +100,8 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
             if (open_idx >= n || tokens[open_idx].token != "'('") continue;
 
             int call_line = tokens[ci].out_line;
-            if (ast_line_width(tokens, call_line, opts.indent_str,
-                               opts.function_space) <= opts.line_limit)
+            if (lidx.width(tokens, call_line, opts.indent_str,
+                           opts.function_space) <= opts.line_limit)
                 continue;
 
             int close_idx = find_matching_paren(tokens, open_idx);
@@ -118,22 +118,14 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
             if (has_braces) continue;
 
             // Skip semicolons on line
+            const std::vector<int>& line_idx = lidx.get(call_line);
             bool has_semi = false;
-            for (int k = 0; k < n; k++) {
-                if (tokens[k].out_line == call_line &&
-                    tokens[k].token == "';'") {
-                    has_semi = true; break;
-                }
+            for (int k : line_idx) {
+                if (tokens[k].token == "';'") { has_semi = true; break; }
             }
             if (has_semi) continue;
 
             // Skip inner calls when outer is wrappable
-            // Get line tokens
-            std::vector<int> line_idx;
-            for (int k = 0; k < n; k++) {
-                if (tokens[k].out_line == call_line) line_idx.push_back(k);
-            }
-
             double func_order = tokens[ci].out_order;
             int pd_before = 0;
             for (int k : line_idx) {
@@ -148,9 +140,8 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                     if (tokens[k].token != "SYMBOL_FUNCTION_CALL") continue;
                     if (tokens[k].out_order >= func_order) continue;
                     int oc_open = -1;
-                    for (int m = 0; m < n; m++) {
-                        if (m > k && tokens[m].token == "'('" &&
-                            tokens[m].out_line == call_line) {
+                    for (int m : line_idx) {
+                        if (m > k && tokens[m].token == "'('") {
                             oc_open = m; break;
                         }
                     }
@@ -163,8 +154,8 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                     for (int ki = oc_open + 1; ki < oc_close; ki++) {
                         if (tokens[ki].token == "'('") d2++;
                         if (tokens[ki].token == "')'") d2--;
-                        if (tokens[ki].token == "','" && d2 == 0) {
-                            skip = true; break;
+                        if (tokens[ki].token == "','") {
+                            if (d2 == 0) { skip = true; break; }
                         }
                     }
                     if (skip) break;
@@ -181,7 +172,9 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                 else if (tt == "LBB") d2 += 2;
                 else if (tt == "')'" || tt == "']'") d2--;
                 else if (tt == "']]'") d2 -= 2;
-                if (tt == "','" && d2 == 0) { has_comma = true; break; }
+                if (tt == "','") {
+                    if (d2 == 0) { has_comma = true; break; }
+                }
             }
             if (!has_comma) continue;
 
@@ -196,13 +189,15 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                 else if (tt == "LBB") d2 += 2;
                 else if (tt == "')'" || tt == "']'") d2--;
                 else if (tt == "']]'") d2 -= 2;
-                if (tt == "','" && d2 == 0) {
-                    std::vector<int> group;
-                    for (int j = current_start; j < k; j++)
-                        group.push_back(j);
-                    arg_groups.push_back(group);
-                    comma_indices.push_back(k);
-                    current_start = k + 1;
+                if (tt == "','") {
+                    if (d2 == 0) {
+                        std::vector<int> group;
+                        for (int j = current_start; j < k; j++)
+                            group.push_back(j);
+                        arg_groups.push_back(group);
+                        comma_indices.push_back(k);
+                        current_start = k + 1;
+                    }
                 }
             }
             // Last arg
@@ -341,9 +336,8 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
 
             // Move trailing tokens
             if (last_offset > 0) {
-                for (int k = 0; k < n; k++) {
-                    if (tokens[k].out_line == call_line &&
-                        tokens[k].out_order > tokens[close_idx].out_order &&
+                for (int k : line_idx) {
+                    if (tokens[k].out_order > tokens[close_idx].out_order &&
                         all_call_idx_set.find(k) == all_call_idx_set.end()) {
                         tokens[k].out_line = call_line + last_offset;
                     }

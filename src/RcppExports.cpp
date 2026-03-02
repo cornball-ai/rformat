@@ -46,10 +46,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_set_trace
+void cpp_set_trace(bool enable);
+RcppExport SEXP _rformat_cpp_set_trace(SEXP enableSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< bool >::type enable(enableSEXP);
+    cpp_set_trace(enable);
+    return R_NilValue;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_rformat_cpp_format_pipeline", (DL_FUNC) &_rformat_cpp_format_pipeline, 8},
     {"_rformat_cpp_format_all", (DL_FUNC) &_rformat_cpp_format_all, 8},
+    {"_rformat_cpp_set_trace", (DL_FUNC) &_rformat_cpp_set_trace, 1},
     {NULL, NULL, 0}
 };
 

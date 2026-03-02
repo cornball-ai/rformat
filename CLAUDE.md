@@ -154,6 +154,17 @@ Every FAIL or IDEMP fix **must** have a corresponding test in `inst/tinytest/tes
 cd ~/rformat-lab && parallel -j10 --timeout 120 r stress_one_combo.R {1} {2} ::: /path/to/file.R ::: $(seq 1 10) 2>/dev/null
 ```
 
+## Dual Implementation: R and C++
+
+The formatting pipeline has two implementations that produce identical output:
+
+- **R** (`R/ast_*.R`, `R/format_tokens.R`): The reference implementation in pure base R. Serves as a fallback when Rcpp compilation is unavailable, and as readable documentation of the algorithms for anyone learning base R vs C++.
+- **C++** (`src/*.cpp`): The fast path via Rcpp. Same algorithms, same token struct, same transform pipeline — just faster (~50x for typical files).
+
+When modifying transform logic, **update both implementations**. The R code is the specification; the C++ code is the optimized version. The stress test suite verifies they produce identical output.
+
+The R entry point (`format_tokens()`) dispatches to `cpp_format_all()` when Rcpp is available.
+
 ## Package Development
 
 - Explicit namespaces required for external functions

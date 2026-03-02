@@ -225,6 +225,30 @@ token_indent_level <- function(terms, idx) {
     level
 }
 
+#' Build Line Index
+#'
+#' Creates a named list mapping output line numbers to row indices in the
+#' terms DataFrame. Avoids repeated `which(terms$out_line == ln)` scans.
+#'
+#' @param terms Enriched terminal DataFrame.
+#' @return Named list where names are line numbers (as strings) and values
+#'   are integer vectors of row indices.
+#' @keywords internal
+build_line_index <- function(terms) {
+    split(seq_len(nrow(terms)), terms$out_line)
+}
+
+#' Look Up Row Indices for a Line
+#'
+#' @param lidx Line index from `build_line_index()`.
+#' @param line_num Output line number.
+#' @return Integer vector of row indices, or `integer(0)` if none.
+#' @keywords internal
+line_index_get <- function(lidx, line_num) {
+    result <- lidx[[as.character(line_num)]]
+    if (is.null(result)) integer(0) else result
+}
+
 #' Compute Display Width of an Output Line
 #'
 #' Sums token text widths plus inter-token spaces for a given output line.
@@ -246,6 +270,41 @@ ast_line_width <- function(terms, line_num, indent_str) {
     prefix_width <- nchar(indent_str) * first_level
 
     # Token widths + spaces
+    width <- prefix_width
+    prev <- NULL
+    prev_prev <- NULL
+    for (i in seq_len(nrow(line_toks))) {
+        tok <- line_toks[i,]
+        if (!is.null(prev) && needs_space(prev, tok, prev_prev)) {
+            width <- width + 1L
+        }
+        width <- width + nchar(tok$out_text)
+        prev_prev <- prev
+        prev <- tok
+    }
+    width
+}
+
+#' Compute Display Width Using Line Index
+#'
+#' Like `ast_line_width()` but uses a pre-built line index for O(1) lookup.
+#'
+#' @param terms Enriched terminal DataFrame.
+#' @param lidx Line index from `build_line_index()`.
+#' @param line_num The output line number.
+#' @param indent_str Indent string.
+#' @return Display width of the line.
+#' @keywords internal
+line_index_width <- function(terms, lidx, line_num, indent_str) {
+    idx <- line_index_get(lidx, line_num)
+    if (length(idx) == 0L) {
+        return(0L)
+    }
+
+    line_toks <- terms[idx,]
+    first_level <- token_indent_level(terms, idx[1])
+    prefix_width <- nchar(indent_str) * first_level
+
     width <- prefix_width
     prev <- NULL
     prev_prev <- NULL
