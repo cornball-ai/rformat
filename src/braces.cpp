@@ -97,7 +97,6 @@ void add_control_braces(std::vector<Token>& tokens, const FormatOptions& opts) {
                 continue;
 
             const std::string& tok = tokens[ci].token;
-            int ctrl_line = tokens[ci].out_line;
 
             // Find condition close paren
             int cond_close;
