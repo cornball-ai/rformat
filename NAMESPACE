@@ -4,5 +4,8 @@ export(rformat)
 export(rformat_dir)
 export(rformat_file)
 
+importFrom(Rcpp,sourceCpp)
 importFrom(stats,setNames)
 importFrom(utils,getParseData)
+
+useDynLib(rformat, .registration = TRUE)

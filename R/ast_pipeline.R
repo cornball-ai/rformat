@@ -35,6 +35,7 @@ format_pipeline <- function(code, indent, wrap, expand_if, brace_style,
     # --- AST transforms (single DataFrame, no re-parsing) ---
 
     terms <- collapse_calls(terms, indent_str, line_limit)
+    terms <- recompute_nesting(terms)
     if (!isFALSE(control_braces)) {
         terms <- add_control_braces(terms, control_braces, indent_str,
                                     line_limit)
@@ -74,13 +75,19 @@ format_pipeline <- function(code, indent, wrap, expand_if, brace_style,
                                     line_limit)
     }
 
-    terms <- collapse_calls(terms, indent_str, line_limit)
     terms <- wrap_long_operators(terms, indent_str, line_limit)
     terms <- wrap_long_calls(terms, indent_str, wrap, line_limit)
     terms <- wrap_long_operators(terms, indent_str, line_limit)
+    terms <- collapse_calls(terms, indent_str, line_limit)
+    terms <- recompute_nesting(terms)
     if (!isFALSE(control_braces)) {
         terms <- add_control_braces(terms, control_braces, indent_str,
                                     line_limit)
+        terms <- wrap_long_operators(terms, indent_str, line_limit)
+        terms <- wrap_long_calls(terms, indent_str, wrap, line_limit)
+        terms <- wrap_long_operators(terms, indent_str, line_limit)
+        terms <- collapse_calls(terms, indent_str, line_limit)
+        terms <- recompute_nesting(terms)
     }
 
     serialize_tokens(terms, indent_str, wrap, line_limit)

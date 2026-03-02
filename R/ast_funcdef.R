@@ -338,6 +338,15 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                     }
                 }
 
+                # Move bare body tokens still on func_line to last_line
+                body_start <- if (has_brace) brace_idx + 1L else close_idx + 1L
+                for (bi in seq(body_start, nrow(terms))) {
+                    if (bi %in% sig_token_idx) next
+                    if (terms$out_line[bi] == func_line) {
+                        terms$out_line[bi] <- last_line
+                    }
+                }
+
                 terms <- terms[order(terms$out_line, terms$out_order),]
                 terms$out_order <- seq_len(nrow(terms))
                 changed <- TRUE

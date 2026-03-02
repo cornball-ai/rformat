@@ -11,7 +11,7 @@
 #' @keywords internal
 collapse_calls <- function(terms, indent_str, line_limit = 80L) {
     changed <- TRUE
-    max_iter <- 100L
+    max_iter <- 10000L
 
     while (changed && max_iter > 0L) {
         max_iter <- max_iter - 1L
@@ -168,36 +168,11 @@ collapse_calls <- function(terms, indent_str, line_limit = 80L) {
             saved_lines <- terms$out_line[all_move]
             terms$out_line[all_move] <- open_line
 
-            # Check if collapsed line exceeds line limit.
-            # Only skip when there are no depth-0 commas inside
-            # the call — if commas exist, wrap_long_calls
-            # can re-wrap after collapse.
+            # Never collapse to overlong lines: causes IDEMP when
+            # wrap_long_calls re-wraps differently on the next pass.
             if (ast_line_width(terms, open_line, indent_str) > line_limit) {
-                has_d0_comma <- FALSE
-                d0 <- 0L
-                for (ck in seq(open_idx + 1L, close_idx - 1L)) {
-                    ct <- terms$token[ck]
-                    if (ct %in% c("'('", "'['")) {
-                        d0 <- d0 + 1L
-                    } else
-                    if (ct == "LBB") {
-                        d0 <- d0 + 2L
-                    } else
-                    if (ct %in% c("')'", "']'")) {
-                        d0 <- d0 - 1L
-                    } else
-                    if (ct == "']]'") {
-                        d0 <- d0 - 2L
-                    }
-                    if (ct == "','" && d0 == 0L) {
-                        has_d0_comma <- TRUE
-                        break
-                    }
-                }
-                if (!has_d0_comma) {
-                    terms$out_line[all_move] <- saved_lines
-                    next
-                }
+                terms$out_line[all_move] <- saved_lines
+                next
             }
 
             # If close_line still has tokens (e.g. IF body after
