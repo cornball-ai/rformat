@@ -152,7 +152,7 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
     }
 
     changed <- TRUE
-    max_iter <- 200L
+    max_iter <- 5000L
 
     while (changed && max_iter > 0L) {
         max_iter <- max_iter - 1L
@@ -453,13 +453,54 @@ add_control_braces <- function(terms, mode = "single", indent_str = "    ",
                             out_line = body_end_line + 1L,
                             out_order = terms$out_order[body_start] - 0.3)
 
+                        # Move tokens after body_end on body_end_line
+                        # (ELSE + else body) to body_end_line + 1
+                        after_body <- which(
+                            terms$out_line == body_end_line &
+                            terms$out_order > terms$out_order[body_end] &
+                            !seq_len(n) %in% body_range)
                         later <- terms$out_line > body_end_line
                         terms$out_line[later] <-
                         terms$out_line[later] + 1L
-                        if (has_else)
-                        terms$out_line[body_end + 1L] <-
+                        if (length(after_body) > 0L)
+                        terms$out_line[after_body] <-
                         body_end_line + 1L
 
+                        terms <- insert_tokens(terms, open_brace)
+                        terms <- insert_tokens(terms, close_brace)
+                        terms <- recompute_nesting(terms)
+                        terms$out_order <- seq_len(nrow(terms))
+                        changed <- TRUE
+                        break
+                    }
+
+                    # Single-line body with ELSE — add braces
+                    # (prevents oscillation: wrapping may make it
+                    # multi-line later, requiring braces)
+                    has_else_sl <- body_end + 1L <= n &&
+                    terms$token[body_end + 1L] == "ELSE"
+                    if (has_else_sl) {
+                        body_range_sl <- seq(body_start, body_end)
+                        open_brace <- make_token("'{'", "{",
+                            out_line = cond_close_line,
+                            out_order =
+                            terms$out_order[cond_close] + 0.5)
+                        close_brace <- make_token("'}'", "}",
+                            out_line = body_start_line + 1L,
+                            out_order =
+                            terms$out_order[body_start] - 0.3)
+                        # Move ELSE + else body on body_start_line
+                        after_body_sl <- which(
+                            terms$out_line == body_start_line &
+                            terms$out_order >
+                            terms$out_order[body_end] &
+                            !seq_len(n) %in% body_range_sl)
+                        later <- terms$out_line > body_start_line
+                        terms$out_line[later] <-
+                        terms$out_line[later] + 1L
+                        if (length(after_body_sl) > 0L)
+                        terms$out_line[after_body_sl] <-
+                        body_start_line + 1L
                         terms <- insert_tokens(terms, open_brace)
                         terms <- insert_tokens(terms, close_brace)
                         terms <- recompute_nesting(terms)

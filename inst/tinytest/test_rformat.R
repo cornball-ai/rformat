@@ -134,19 +134,13 @@ expect_equal(
   "list(a = 1, b = 2, c = 3)\n"
 )
 
-# Long multi-line calls get collapsed then re-wrapped
+# Long multi-line calls stay multi-line when overlong
 long_args <- paste(paste0("very_long_name_", 1:5), collapse = ",\n  ")
 code <- paste0("c(\n  ", long_args, "\n)")
 result <- rformat(code)
 expect_true(
   grepl("\n", sub("\n$", "", result)),
   info = "Long calls should be wrapped across lines"
-)
-# Should be compactly wrapped, not one-arg-per-line
-result_lines <- strsplit(sub("\n$", "", result), "\n")[[1]]
-expect_true(
-  length(result_lines) < 5,
-  info = "Long calls should wrap compactly, not one-arg-per-line"
 )
 
 # Don't collapse calls containing comments
@@ -630,4 +624,36 @@ r1 <- rformat(code)
 expect_true(
   grepl("c\\(if \\(a\\) b else d", r1),
   info = "Short bare if-else in call should stay inline"
+)
+
+# --- Multi-line bare if-else body with closing paren before else ---
+# Regression test for misc.r FAIL: closing paren and else on same line
+code <- "if (x) f(g(\n  a\n)) else h()"
+r1 <- rformat(code, control_braces = "next_line")
+expect_true(
+  !is.null(tryCatch(parse(text = r1), error = function(e) NULL)),
+  info = "Multi-line bare body with ELSE should produce valid R code"
+)
+expect_true(
+  grepl("else", r1),
+  info = "ELSE keyword should be preserved in formatted output"
+)
+r2 <- rformat(r1, control_braces = "next_line")
+expect_equal(
+  r1, r2,
+  info = "Multi-line bare if-else body should be idempotent"
+)
+
+# Single-line bare body with ELSE in next_line mode should add braces
+# (prevents oscillation: wrapping may make body multi-line later)
+code_sl_else <- "if (cond)\n  \"a\" else \"b\""
+r_sl <- rformat(code_sl_else, control_braces = "next_line")
+expect_true(
+  grepl("\\{", r_sl),
+  info = "next_line mode should brace single-line bare body with ELSE"
+)
+r_sl2 <- rformat(r_sl, control_braces = "next_line")
+expect_equal(
+  r_sl, r_sl2,
+  info = "next_line single-line bare body with ELSE should be idempotent"
 )

@@ -14,5 +14,7 @@ URL: https://github.com/cornball-ai/rformat
 BugReports: https://github.com/cornball-ai/rformat/issues
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
+Imports: Rcpp
+LinkingTo: Rcpp
 Suggests: tinytest, simplermarkdown
 VignetteBuilder: simplermarkdown
