@@ -18,15 +18,17 @@ wrap_long_operators <- function(terms, indent_str, line_limit = 80L) {
         changed <- FALSE
 
         terms <- terms[order(terms$out_line, terms$out_order),]
+        terms$out_order <- seq_len(nrow(terms))
+        lidx <- build_line_index(terms)
         out_lines <- unique(terms$out_line)
 
         for (ln in out_lines) {
-            width <- ast_line_width(terms, ln, indent_str)
+            width <- line_index_width(terms, lidx, ln, indent_str)
             if (width <= line_limit) {
                 next
             }
 
-            idx <- which(terms$out_line == ln)
+            idx <- line_index_get(lidx, ln)
             line_toks <- terms[idx,]
 
             # Skip semicolons
@@ -78,8 +80,6 @@ wrap_long_operators <- function(terms, indent_str, line_limit = 80L) {
 
             # Split: tokens after the break go to a new line
             break_at <- best_break
-            cont_level <- line_toks$nesting_level[break_at]
-            # For the continuation, use the nesting level at the break point
             new_line <- ln + 1L
 
             # Shift all later lines up by 1
@@ -123,6 +123,8 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
         changed <- FALSE
 
         terms <- terms[order(terms$out_line, terms$out_order),]
+        terms$out_order <- seq_len(nrow(terms))
+        lidx <- build_line_index(terms)
         call_idx <- which(terms$token == "SYMBOL_FUNCTION_CALL")
 
         for (ci in call_idx) {
@@ -137,7 +139,8 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             call_line <- terms$out_line[ci]
 
             # Only overlong lines
-            if (ast_line_width(terms, call_line, indent_str) <= line_limit) {
+            if (line_index_width(terms, lidx, call_line,
+                                 indent_str) <= line_limit) {
                 next
             }
 
@@ -169,7 +172,7 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             }
 
             # Skip semicolons on this line
-            line_idx <- which(terms$out_line == call_line)
+            line_idx <- line_index_get(lidx, call_line)
             line_toks <- terms[line_idx,]
             if (any(line_toks$token == "';'")) {
                 next
@@ -263,7 +266,6 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             }
 
             # Collect argument groups (ranges of indices between depth-0 commas)
-            # Empty args (consecutive commas) get empty integer(0) groups.
             arg_groups <- list()
             comma_indices <- integer(0)
             current_start <- open_idx + 1L
@@ -314,8 +316,8 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
             if (wrap == "paren") {
                 # Compute paren column = prefix width + func_name + "("
-                prefix_idx <- which(terms$out_line == call_line &
-                                    terms$out_order < terms$out_order[ci])
+                prefix_idx <- line_idx[
+                    terms$out_order[line_idx] < terms$out_order[ci]]
                 prefix_w <- nchar(indent_str) *
                 token_indent_level(terms, line_idx[1])
                 prev <- NULL
@@ -341,7 +343,6 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             }
 
             # Greedy packing: put args on lines until they exceed limit
-            # First line: prefix + func( + first args
             # Measure first-line width up to "("
             first_line_w <- 0L
             prev <- NULL
@@ -442,11 +443,12 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             terms$out_line[close_idx] <- call_line + last_offset
 
             # Move trailing tokens on call_line after close paren to
-            # the close paren's line (e.g., outer comma after nested call)
+            # the close paren's line
             if (last_offset > 0L) {
-                trailing <- terms$out_line == call_line &
-                terms$out_order > terms$out_order[close_idx] &
-                !(seq_len(nrow(terms)) %in% all_call_idx)
+                trailing <- line_idx[
+                    terms$out_order[line_idx] >
+                        terms$out_order[close_idx] &
+                        !line_idx %in% all_call_idx]
                 terms$out_line[trailing] <-
                 call_line + last_offset
             }
@@ -460,4 +462,3 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
     terms
 }
-

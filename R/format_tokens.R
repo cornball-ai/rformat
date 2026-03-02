@@ -39,8 +39,32 @@ format_tokens <- function(code, indent = 4L, wrap = "paren",
         as.character(control_braces)
     }
 
-    cpp_format_all(code, indent_str, wrap, expand_if, brace_style,
-                   line_limit, function_space, cb_str)
+    # C++ fast path (Rcpp); pure R fallback if shared library not loaded
+    if (is.loaded("_rformat_cpp_format_all")) {
+        return(cpp_format_all(code, indent_str, wrap, expand_if,
+                              brace_style, line_limit, function_space,
+                              cb_str))
+    }
+
+    # Pure R fallback: split into top-level expressions, format each
+    .fmt_opts$function_space <- function_space
+    chunks <- split_toplevel(code)
+    parts <- character(length(chunks))
+    for (i in seq_along(chunks)) {
+        if (!chunks[[i]]$is_expr) {
+            parts[i] <- chunks[[i]]$text
+        } else {
+            parts[i] <- format_pipeline(chunks[[i]]$text, indent_str,
+                                        wrap, expand_if, brace_style,
+                                        line_limit, function_space,
+                                        control_braces)
+        }
+    }
+    result <- paste(parts, collapse = "\n")
+    if (!endsWith(result, "\n")) {
+        result <- paste0(result, "\n")
+    }
+    result
 }
 
 #' Compute Nesting Depth Per Line

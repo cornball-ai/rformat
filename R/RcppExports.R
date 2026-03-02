@@ -9,3 +9,7 @@ cpp_format_all <- function(code, indent_str, wrap, expand_if, brace_style, line_
     .Call(`_rformat_cpp_format_all`, code, indent_str, wrap, expand_if, brace_style, line_limit, function_space, control_braces)
 }
 
+cpp_set_trace <- function(enable) {
+    invisible(.Call(`_rformat_cpp_set_trace`, enable))
+}
+

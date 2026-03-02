@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include "token.h"
 #include <map>
+#include <chrono>
 
 // Convert R DataFrame (from getParseData) to vector<Token>
 static std::vector<Token> dataframe_to_tokens(Rcpp::DataFrame pd) {
@@ -60,56 +61,69 @@ static std::vector<std::string> split_lines(const std::string& code) {
     return lines;
 }
 
+static bool g_trace = false;
+
+static double elapsed_ms(std::chrono::steady_clock::time_point start) {
+    auto end = std::chrono::steady_clock::now();
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+#define TIMED(label, expr) do { \
+    auto _t = std::chrono::steady_clock::now(); \
+    expr; \
+    if (g_trace) Rprintf("  %s: %.1f ms\n", label, elapsed_ms(_t)); \
+} while(0)
+
 // Run the full AST transform pipeline on enriched tokens
 static void run_pipeline_transforms(std::vector<Token>& tokens,
                                     const FormatOptions& opts) {
-    collapse_calls(tokens, opts);
-    recompute_nesting(tokens);
+    TIMED("collapse_calls_1", collapse_calls(tokens, opts));
+    TIMED("recompute_1", recompute_nesting(tokens));
     if (!opts.control_braces.empty()) {
-        add_control_braces(tokens, opts);
+        TIMED("braces_1", add_control_braces(tokens, opts));
     }
 
-    expand_call_if_args(tokens, opts);
+    TIMED("expand_if_1", expand_call_if_args(tokens, opts));
     if (!opts.control_braces.empty()) {
-        add_control_braces(tokens, opts);
+        TIMED("braces_2", add_control_braces(tokens, opts));
     }
 
-    wrap_long_operators(tokens, opts);
-    wrap_long_calls(tokens, opts);
-    reformat_function_defs(tokens, opts);
+    TIMED("wrap_ops_1", wrap_long_operators(tokens, opts));
+    TIMED("wrap_calls_1", wrap_long_calls(tokens, opts));
+    TIMED("funcdef", reformat_function_defs(tokens, opts));
     if (!opts.control_braces.empty()) {
-        add_control_braces(tokens, opts);
+        TIMED("braces_3", add_control_braces(tokens, opts));
     }
 
     if (opts.expand_if) {
         FormatOptions if_opts = opts;
         if_opts.line_limit = 0;
-        reformat_inline_if(tokens, if_opts);
+        TIMED("inline_if", reformat_inline_if(tokens, if_opts));
     } else {
-        reformat_inline_if(tokens, opts);
+        TIMED("inline_if", reformat_inline_if(tokens, opts));
     }
 
     if (!opts.control_braces.empty()) {
-        add_control_braces(tokens, opts);
+        TIMED("braces_4", add_control_braces(tokens, opts));
     }
 
-    expand_call_if_args(tokens, opts);
+    TIMED("expand_if_2", expand_call_if_args(tokens, opts));
     if (!opts.control_braces.empty()) {
-        add_control_braces(tokens, opts);
+        TIMED("braces_5", add_control_braces(tokens, opts));
     }
 
-    wrap_long_operators(tokens, opts);
-    wrap_long_calls(tokens, opts);
-    wrap_long_operators(tokens, opts);
-    collapse_calls(tokens, opts);
-    recompute_nesting(tokens);
+    TIMED("wrap_ops_2", wrap_long_operators(tokens, opts));
+    TIMED("wrap_calls_2", wrap_long_calls(tokens, opts));
+    TIMED("wrap_ops_3", wrap_long_operators(tokens, opts));
+    TIMED("collapse_calls_2", collapse_calls(tokens, opts));
+    TIMED("recompute_2", recompute_nesting(tokens));
     if (!opts.control_braces.empty()) {
-        add_control_braces(tokens, opts);
-        wrap_long_operators(tokens, opts);
-        wrap_long_calls(tokens, opts);
-        wrap_long_operators(tokens, opts);
-        collapse_calls(tokens, opts);
-        recompute_nesting(tokens);
+        TIMED("braces_6", add_control_braces(tokens, opts));
+        TIMED("wrap_ops_4", wrap_long_operators(tokens, opts));
+        TIMED("wrap_calls_3", wrap_long_calls(tokens, opts));
+        TIMED("wrap_ops_5", wrap_long_operators(tokens, opts));
+        TIMED("collapse_calls_3", collapse_calls(tokens, opts));
+        TIMED("recompute_3", recompute_nesting(tokens));
     }
 }
 
@@ -335,6 +349,8 @@ Rcpp::String cpp_format_all(std::string code,
 
             restore_truncated_str_const(tokens, expr_lines);
             enrich_terminals(tokens);
+            if (g_trace) Rprintf("expr %d: %d tokens, %d lines\n",
+                (int)k, (int)tokens.size(), expr_end - expr_start + 1);
             run_pipeline_transforms(tokens, opts);
 
             std::string formatted = serialize_tokens(tokens, opts);
@@ -363,5 +379,11 @@ Rcpp::String cpp_format_all(std::string code,
         result += "\n";
     }
 
+    g_trace = false;
     return Rcpp::String(result);
+}
+
+// [[Rcpp::export]]
+void cpp_set_trace(bool enable) {
+    g_trace = enable;
 }

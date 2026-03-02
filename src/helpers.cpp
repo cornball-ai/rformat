@@ -132,6 +132,31 @@ Token make_token(const std::string& token_type, const std::string& text,
     return t;
 }
 
+int LineIndex::width(const std::vector<Token>& tokens, int line_num,
+                     const std::string& indent_str,
+                     bool function_space) const {
+    const std::vector<int>& idx = get(line_num);
+    if (idx.empty()) return 0;
+
+    int first_level = token_indent_level(tokens, idx[0]);
+    int prefix_width = static_cast<int>(indent_str.size()) * first_level;
+
+    int w = prefix_width;
+    const Token* prev = nullptr;
+    const Token* prev_prev = nullptr;
+    for (int i : idx) {
+        const Token& tok = tokens[i];
+        if (prev != nullptr && needs_space(*prev, tok, prev_prev,
+                                           function_space)) {
+            w += 1;
+        }
+        w += static_cast<int>(tok.out_text.size());
+        prev_prev = prev;
+        prev = &tok;
+    }
+    return w;
+}
+
 int col_to_charpos(const std::string& line, int col) {
     if (line.find('\t') == std::string::npos) return col;
     int display_col = 0;

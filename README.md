@@ -7,7 +7,9 @@ from the token stream and expression structure, not from regex or
 indentation heuristics. All transforms operate on an enriched token
 DataFrame.
 
-No dependencies beyond base R.
+No dependencies beyond base R. An optional Rcpp backend accelerates
+formatting ~50x for large files; the pure R implementation is always
+available as a fallback.
 
 ## Installation
 
@@ -102,6 +104,19 @@ formats every `.R` file from 126 packages (base, recommended, and
 popular CRAN), checking that formatted code parses and that formatting
 twice produces identical output. Tests run with randomized style
 parameters to exercise all option combinations.
+
+## Architecture
+
+The formatting pipeline has two implementations that produce identical output:
+
+- **R** (`R/ast_*.R`): Pure base R reference implementation. No compilation
+  needed; readable source for understanding the algorithms.
+- **C++** (`src/*.cpp`): Rcpp fast path. Same algorithms, ~50x faster on
+  typical files. Used automatically when available.
+
+Both operate on the same token stream from `parse()` + `getParseData()`:
+enrich terminals with nesting depth, run transforms (collapse, wrap,
+braces, etc.), then serialize back to text.
 
 ## License
 
