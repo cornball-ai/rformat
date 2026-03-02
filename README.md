@@ -1,15 +1,14 @@
 # rformat
 
-A code formatter for R, built on R's parser, written in base R.
+A code formatter for R, built on R's parser. Formatting logic is
+implemented in both base R and C++ (via Rcpp) — the C++ path runs
+automatically and is ~85x faster; the R implementation serves as a
+readable reference and fallback.
 
 `rformat` uses `parse()` and `getParseData()` to make formatting decisions
 from the token stream and expression structure, not from regex or
 indentation heuristics. All transforms operate on an enriched token
-DataFrame.
-
-No dependencies beyond base R. An optional Rcpp backend accelerates
-formatting ~50x for large files; the pure R implementation is always
-available as a fallback.
+vector (C++) or DataFrame (R).
 
 ## Installation
 
@@ -111,8 +110,8 @@ The formatting pipeline has two implementations that produce identical output:
 
 - **R** (`R/ast_*.R`): Pure base R reference implementation. No compilation
   needed; readable source for understanding the algorithms.
-- **C++** (`src/*.cpp`): Rcpp fast path. Same algorithms, ~50x faster on
-  typical files. Used automatically when available.
+- **C++** (`src/*.cpp`): Rcpp fast path. Same algorithms, ~85x faster on
+  typical files. Used automatically.
 
 Both operate on the same token stream from `parse()` + `getParseData()`:
 enrich terminals with nesting depth, run transforms (collapse, wrap,
