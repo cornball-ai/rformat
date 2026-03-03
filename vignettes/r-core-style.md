@@ -10,14 +10,15 @@ title: "R Core Style Analysis"
 # R Core Style Analysis
 
 This vignette documents the analysis of actual R source code that informed
-the formatting choices in rformat. We analyzed every `.R` file from the 22
-packages that ship with R: 14 base packages and 8 recommended packages.
+the formatting choices in rformat. We analyzed every `.R` file from the 30
+packages that ship with R: 15 base packages and 15 recommended packages.
 
 ## Method
 
 We downloaded the R 4.5.2 source tarball and extracted the R/ directories
-from all base packages. For recommended packages (codetools, lattice, MASS,
-Matrix, mgcv, nlme, nnet, survival) we used the CRAN source tarballs. We
+from all base packages. For recommended packages (boot, class, cluster,
+codetools, foreign, KernSmooth, lattice, MASS, Matrix, mgcv, nlme, nnet,
+rpart, spatial, survival) we used the CRAN source tarballs. We
 parsed each file with `getParseData()` and tallied formatting conventions
 across all function definitions.
 
@@ -25,7 +26,7 @@ An earlier version of this analysis used `deparse()` output from 5 packages.
 That approach shows *reconstructed* formatting, not the original source. The
 numbers below come from the actual source files.
 
-## Results: Base R (14 packages)
+## Results: Base R (15 packages, excluding translations)
 
 612 files, 172,810 lines, 8,426 function definitions.
 
@@ -76,13 +77,13 @@ Of the 873 multi-line signatures:
 
 Paren alignment is the clear convention for multi-line signatures (80%).
 
-## Results: Base + Recommended (22 packages)
+## Results: Base + Recommended (30 packages)
 
 920 files, 263,807 lines, 12,306 function definitions.
 
-Adding the 8 recommended packages barely shifts the percentages:
+Adding the 15 recommended packages barely shifts the percentages:
 
-| Metric | Base 14 | All 22 |
+| Metric | Base 15 | All 30 |
 |--------|--------:|-------:|
 | K&R braces | 52.9% | 53.6% |
 | Allman braces | 47.1% | 46.4% |
