@@ -284,5 +284,5 @@ rec_results <- lapply(rec_files, analyze_file)
 rec_results <- Filter(Negate(is.null), rec_results)
 
 cat("\n")
-report(base_results, "Base R (14 packages)")
-report(c(base_results, rec_results), "Base + Recommended (22 packages)")
+report(base_results, "Base R (15 packages)")
+report(c(base_results, rec_results), "Base + Recommended (30 packages)")

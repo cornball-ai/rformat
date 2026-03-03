@@ -57,6 +57,11 @@ rformat <- function(code, indent = 4L, line_limit = 80L, wrap = "paren",
     if (!parsed_ok && else_same_line) {
         code <- fix_else_placement(code)
     }
+    if (!parsed_ok && !else_same_line) {
+        warning("code does not parse and else_same_line is FALSE; ",
+                "returning input unchanged")
+        return(code)
+    }
 
     formatted <- format_tokens(code, indent = indent, wrap = wrap,
                                expand_if = expand_if,

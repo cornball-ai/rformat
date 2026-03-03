@@ -10,7 +10,7 @@ title: "Stress Testing rformat"
 # Stress Testing rformat
 
 This vignette documents rformat's stress testing methodology and results against
-100 popular CRAN packages.
+126 CRAN and base R packages.
 
 ## Correctness Invariants
 
@@ -44,150 +44,106 @@ second pass disagrees with. This signals an internal inconsistency.
 
 ## Test Methodology
 
-The stress test script (`lab/stress_test.R`) does the following for each package:
+The stress test script (`stress_test.R`) does the following for each package:
 
-1. Downloads the source tarball from CRAN
-2. Extracts the `R/` directory
-3. Filters to parseable `.R` files (some packages have files that don't parse)
-4. Formats each file with `rformat()`
-5. **Parse gate**: verifies the formatted output parses without errors
-6. **Idempotency gate**: formats the output a second time and checks
-   `rformat(rformat(x)) == rformat(x)`
-7. Reports results per-package and per-file
+1. Extracts the `R/` directory from cached source tarballs
+2. Filters to parseable `.R` files (some packages have files that don't parse)
+3. Formats each file with `rformat()` using **randomized style parameters**
+   (indent, wrap, brace_style, control_braces, line_limit, expand_if, etc.)
+4. **Parse gate**: verifies the formatted output parses without errors
+5. **Idempotency gate**: formats the output a second time with the same
+   parameters and checks `rformat(rformat(x)) == rformat(x)`
+6. Reports results per-package and per-file
 
-A per-file timeout (default 10 seconds) prevents hanging on unusually large files.
+### Randomized Parameters
+
+Each file is formatted with a randomly chosen parameter combination. This
+exercises all option interactions and catches edge cases that fixed parameters
+would miss. The 10 strategic combinations cover:
+
+- Default settings, narrow limits, 2-space indent, tab indent
+- Allman braces, control braces, expanded if-else, function space
+- Fixed wrap style, combined options
 
 ### Running the Stress Test
 
-```r
-# Run all 100 packages
-r lab/stress_test.R
+```
+# Full 126-package run (parallel)
+cd ~/rformat-lab
+r -e 'cat(read.csv("stress_timing.csv")$package, sep="\n")' |
+    parallel -j16 --timeout 900 r stress_test.R {} 2>/dev/null |
+    grep -E "FAIL|IDEMP|_DONE_"
 
-# Run first N packages
-N=10 r lab/stress_test.R
+# Test specific packages
+r stress_test.R dplyr
+r stress_test.R ggplot2
 
-# Run specific packages
-PKGS="dplyr rlang Rcpp" r lab/stress_test.R
-
-# Adjust per-file timeout (seconds)
-TIMEOUT=30 r lab/stress_test.R
+# Test one file with all 10 strategic combos
+parallel -j10 --timeout 120 r stress_one_combo.R {1} {2} \
+    ::: path/to/file.R ::: $(seq 1 10)
 ```
 
 ## Package List
 
-The test suite covers 100 packages across 10 ecosystems:
+The test suite covers 126 packages across multiple ecosystems:
 
 | Category | Packages |
 |----------|----------|
+| Base R (15) | base, compiler, graphics, grDevices, grid, methods, parallel, splines, stats, stats4, tcltk, tools, utils, datasets, class |
+| Recommended (15) | boot, cluster, codetools, foreign, KernSmooth, lattice, MASS, Matrix, mgcv, nlme, nnet, rpart, spatial, survival |
 | Core / Infrastructure | Rcpp, rlang, vctrs, glue, cli, withr, lifecycle, magrittr, pillar, crayon |
 | Data Manipulation | dplyr, tidyr, tibble, readr, stringr, forcats, lubridate, purrr, data.table, janitor |
 | Visualization | ggplot2, scales, patchwork, cowplot, plotly, lattice, leaflet, ggridges, viridis, DT |
 | Shiny / Web | shiny, shinydashboard, bslib, htmltools, httpuv, httr, httr2, plumber, rvest, xml2 |
 | Modeling / Stats | caret, recipes, parsnip, workflows, yardstick, glmnet, lme4, survival, brms, xgboost |
 | Devtools / Packaging | testthat, tinytest, devtools, usethis, roxygen2, pkgdown, covr, remotes, pak, renv |
-| Data Import / Storage | readxl, writexl, DBI, RSQLite, duckdb, arrow, sparklyr, pins, qs, fst |
+| Data Import / Storage | readxl, writexl, DBI, RSQLite, duckdb, arrow, sparklyr, pins, qs2, fst |
 | Time Series / Specialized | forecast, zoo, xts, tsibble, fable, igraph, sf, terra, sp, rmarkdown |
 | String / Parsing / Lang | stringi, jsonlite, yaml, digest, R6, xmlparsedata, evaluate, callr, processx, here |
 | Performance / Parallel | future, furrr, parallelly, RcppParallel, bench, profvis, memoise, progress, curl, openssl |
 
 ## Results
 
-Results from a single run on February 2026.
+Results as of March 2026 with the C++ (Rcpp) backend.
 
 ### Summary
 
-| Status | Packages | Files |
-|--------|----------|-------|
-| OK (parse + idempotent) | 68 | 4,751 |
-| IDEMP (parse OK, not idempotent) | 13 | 20 files affected |
-| FAIL (parse errors in output) | 17 | 56 files affected |
-| SKIP (download failed) | 2 | -- |
+| Metric | Value |
+|--------|-------|
+| Packages tested | 126 |
+| Files formatted | 5,843 |
+| Parse failures (FAIL) | 0 |
+| Idempotency failures (IDEMP) | 0 |
+| Wall clock time (16 cores) | ~58 seconds |
 
-**Overall: 4,751 / 4,807 files formatted successfully (98.8%)**
-
-26 files across 11 packages timed out (exceeded the 10-second per-file limit).
-
-### Fully Passing Packages (68)
-
-Rcpp, rlang, vctrs, glue, cli, withr, lifecycle, magrittr, pillar, crayon,
-dplyr, tibble, readr, stringr, forcats, purrr, janitor, scales, cowplot,
-leaflet, viridis, bslib, htmltools, httpuv, httr, httr2, plumber, rvest,
-xml2, parsnip, workflows, yardstick, xgboost, testthat, tinytest, devtools,
-usethis, roxygen2, pkgdown, remotes, pak, readxl, writexl, DBI, RSQLite,
-duckdb, sparklyr, fst, xts, tsibble, igraph, stringi, jsonlite, yaml,
-digest, R6, xmlparsedata, evaluate, callr, here, furrr, RcppParallel, bench,
-profvis, memoise, progress, curl, openssl
-
-### Packages with Idempotency Issues (13)
-
-These packages format correctly (output parses) but produce slightly different
-output when formatted a second time. Typically 1-2 files per package, usually
-due to edge cases in operator continuation or call wrapping.
-
-tidyr (1 file), lubridate (1), patchwork (1), plotly (1), ggridges (1),
-brms (1), covr (1), arrow (1), pins (2), forecast (1), terra (6),
-processx (2), parallelly (1)
-
-### Packages with Parse Failures (17)
-
-These packages have files where the formatted output doesn't parse. This
-indicates bugs in rformat's formatting passes that need investigation.
-
-data.table (6 files), ggplot2 (1), lattice (7), DT (2), shiny (1),
-shinydashboard (1), caret (2), glmnet (1), lme4 (4), survival (5),
-renv (3), zoo (4), fable (1), sf (12), sp (3), rmarkdown (1), future (2)
+**0 failures across 5,843 files with randomized style parameters.**
 
 ## Bugs Found and Fixed
 
-The stress test has been instrumental in finding bugs. Each round of testing
-surfaces new failure patterns that are then fixed and regression-tested.
+The stress test has been instrumental in finding and fixing bugs. Each round of
+testing surfaced new failure patterns, all now covered by regression tests.
 
-### Round 1: Core formatting bugs
+### Tab-expanded column positions
 
-These bugs were found in the initial stress test run and fixed before the first
-published results.
+R's `getParseData()` reports column numbers with tabs expanded to 8-column tab
+stops, but `substring()` works on character positions. Using `col1`/`col2`
+directly with `substring()` produces wrong results when source lines contain
+tabs. Fixed with `col_to_charpos()` and `display_width()` helper functions.
 
-**Tab-expanded column positions.** R's `getParseData()` reports column numbers
-with tabs expanded to 8-column tab stops, but `substring()` works on character
-positions. Using `col1`/`col2` directly with `substring()` produces wrong
-results when source lines contain tabs. Fixed with `col_to_charpos()` and
-`display_width()` helper functions.
+### Long string truncation
 
-**Nested call wrap corruption.** When a long line contained nested function
-calls (e.g., `sprintf(..., paste(sprintf(...)))`) the wrap pass would try to
-wrap an inner call that was already inside another call's parentheses on the
-same line. Fixed by checking `paren_depth_before > 0` and skipping nested calls.
-
-**Comment between if-condition and body.** Code like `if (!x) # comment`
-followed by the body on the next line would lose the comment. Fixed by detecting
-COMMENT tokens after `)` and preserving them on the opening brace line.
-
-**Operator continuation instability.** Wrap passes used paren-column alignment
-for continuation lines, but `format_tokens` uses depth-based indentation.
-The two systems disagreed, causing the second format pass to change indentation.
-Fixed by switching wrap passes to depth-based indent matching `format_tokens`.
-
-**Anonymous function spacing.** `function(x)` was not getting its required
-space: `function (x)`. The `needs_space()` function returned FALSE for `(`
-after `FUNCTION`. Fixed to return TRUE.
-
-### Round 2: Cross-boundary and truncation bugs
-
-These bugs were found in the second stress test run (17 FAIL packages remaining,
-down from 23).
-
-**Long string truncation (Bug A).** `getParseData()` truncates `STR_CONST`
-tokens longer than ~1000 characters to a placeholder like
-`[1200 chars quoted with '"']`. The formatter would output this placeholder
-instead of the actual string, breaking parsing. Fixed by detecting truncated
+`getParseData()` truncates `STR_CONST` tokens longer than ~1000 characters to a
+placeholder like `[1200 chars quoted with '"']`. Fixed by detecting truncated
 tokens and recovering the original text from source lines using the token's
-line/column positions. Affected: httr2, tinytest, igraph.
+line/column positions.
 
-**ELSE search crosses brace boundaries (Bug B).** `reformat_one_inline_if`
-searches forward from `x <- if (cond) value` to find a matching `else`. The
-search tracked if-else nesting but not brace boundaries. For code like:
+### ELSE search crosses brace boundaries
 
-```r
+`reformat_one_inline_if` searches forward from `x <- if (cond) value` to find a
+matching `else`. The search tracked if-else nesting but not brace boundaries. For
+code like:
+
+```
 if (outer) {
     space <- if (cond) padding
     use(space)
@@ -196,45 +152,46 @@ if (outer) {
 }
 ```
 
-The search would cross the `}` and find the outer `else`, incorrectly expanding
-the inner `if` and collapsing `use(space)` into the else branch. Fixed by
-tracking brace depth and stopping the search when `brace_depth < 0` (exiting
-the enclosing block). Only matches ELSE at `brace_depth == 0`. Affected: sf
-(14 files), lattice (7), zoo, sp, future, rmarkdown, and others.
+The search would cross the `}` and find the outer `else`. Fixed by tracking brace
+depth and stopping when `brace_depth < 0`.
 
-**Braced false body collapsed (Bug C).** When expanding
-`x <- if (cond) a else { stmt1; stmt2 }`, the formatter would try to inline
-the braced false body using `format_line_tokens`, which strips newlines and
-produces `x <- { stmt1 stmt2 }` — missing semicolons, broken parse. Fixed by
-skipping expansion when the false body starts with `{`. Affected: zoo,
-data.table, and others with multi-statement else blocks.
+### Braced false body collapsed
+
+When expanding `x <- if (cond) a else { stmt1; stmt2 }`, the formatter would
+try to inline the braced false body, producing `x <- { stmt1 stmt2 }` with
+missing semicolons. Fixed by skipping expansion when the false body starts
+with `{`.
+
+### Nested call wrap corruption
+
+When a long line contained nested function calls, the wrap pass would try to
+wrap an inner call already inside another call's parentheses on the same line.
+Fixed by checking `paren_depth_before > 0` and skipping nested calls.
+
+### Comment transparency in bare body detection
+
+Comments between a trailing operator and a value (e.g., `else # comment` with
+body on the next line) were treated as statement boundaries. Fixed by tracking
+`last_real_tok` and only checking non-comment tokens against statement-ending
+token types.
 
 ## Idempotency Design
 
-Achieving idempotency required careful coordination between rformat's formatting
-passes. The key insight: two systems compute indentation, and they must agree.
+Achieving idempotency required careful coordination between formatting passes.
+The key insight: two systems compute indentation, and they must agree.
 
 **`format_tokens`** (the initial pass) computes indentation from brace and
 bracket depth: `indent = (brace_depth + paren_depth) * indent_size`. It tracks
 `(`, `)`, `[`, `]`, and `[[` as part of paren depth.
 
-**Wrap functions** (`wrap_one_long_call`, `wrap_one_long_operator`) split long
-lines and must produce continuation indentation that `format_tokens` will
-preserve on the next pass.
-
-The solution: wrap functions use depth-based indentation that matches
-`format_tokens`, rather than column-aligned indentation (which `format_tokens`
-would normalize away). Specifically:
+**Wrap functions** (`wrap_long_calls`, `wrap_long_operators`) split long lines and
+must produce continuation indentation that `format_tokens` will preserve on the
+next pass. They use depth-based indentation matching `format_tokens`, rather than
+column-aligned indentation (which `format_tokens` would normalize away):
 
 - **Operator wrap**: continuation indent = `base_indent + bracket_depth * indent_size`
 - **Call wrap**: continuation indent = `base_indent + (bracket_depth_before + 1) * indent_size`
 
 Paren-column alignment (aligning continuation to the opening parenthesis) is
-preserved for function definitions via `reformat_one_function`, which rebuilds
+preserved for function definitions via `reformat_function_defs`, which rebuilds
 function signatures from scratch on each pass.
-
-## Future Work
-
-- Fix the remaining 56 parse failures across 17 packages
-- Resolve remaining 20 idempotency edge cases across 13 packages
-- Add AST comparison testing for semantic preservation verification
