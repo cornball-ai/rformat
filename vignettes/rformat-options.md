@@ -134,16 +134,43 @@ cat(rformat(code, expand_if = TRUE))
 
 ## `else_same_line`
 
-When TRUE (default), joins `} else` on the same line. Matches R Core
-source code where 70% use same-line else. This also repairs a common
-problem: `else` on its own line is a parse error at top level in R,
-so this option makes such code formattable.
+In R, `else` on its own line is a parse error at top level (though
+it's valid inside braces). When TRUE (default), this option repairs
+top-level `}\nelse` by joining them to `} else` before formatting.
+When FALSE, unparseable input is returned unchanged with a warning.
 
 ```{.R}
-# } and else on separate lines -- normally a top-level parse error.
-# else_same_line (the default) joins them and formats:
+# Top-level } else on separate lines is a parse error.
+# else_same_line (the default) repairs it:
 code <- "if (x) {\n    1\n}\nelse {\n    2\n}"
 cat(rformat(code))
+```
+
+## `join_else`
+
+When TRUE (default), moves `else` to the same line as the preceding `}`.
+Matches R Core source code where 70% use same-line else. When FALSE,
+`}\nelse` on separate lines is preserved.
+
+This is an AST-level transform that works on already-valid code inside
+braces, unlike `else_same_line` which is a text-level parse repair.
+
+```{.R}
+code <- "f <- function(x) {
+if (x > 0) {
+    y <- log(x)
+}
+else {
+    y <- NA
+}
+y
+}"
+
+# Default: else joins the } line
+cat(rformat(code))
+
+# Preserve } / else on separate lines
+cat(rformat(code, join_else = FALSE))
 ```
 
 ## `function_space`

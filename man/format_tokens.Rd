@@ -5,7 +5,7 @@
 \usage{
 format_tokens(code, indent = 4L, wrap = "paren", expand_if = FALSE,
               brace_style = "kr", line_limit = 80L, function_space = FALSE,
-              control_braces = FALSE)
+              control_braces = FALSE, join_else = TRUE)
 }
 \arguments{
 \item{code}{Character string of R code.}
@@ -25,6 +25,8 @@ parenthesis, `"fixed"` uses 8-space indent.}
 \item{function_space}{If TRUE, add space before `(` in function definitions.}
 
 \item{control_braces}{If TRUE, add braces to bare one-line control flow bodies.}
+
+\item{join_else}{If TRUE, move else to same line as preceding `\}`.}
 }
 \value{
 Formatted code as character string.

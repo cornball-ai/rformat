@@ -111,7 +111,7 @@ default (`control_braces = FALSE`). Use `control_braces = TRUE` to add braces.
 | `}\nelse` (new line) | 1,987 | 30.3 |
 
 Same-line `} else` is the majority practice. rformat enforces this by default
-(`else_same_line = TRUE`). Use `else_same_line = FALSE` to preserve `}\nelse`.
+(`join_else = TRUE`). Use `join_else = FALSE` to preserve `}\nelse`.
 
 ## Source examples
 
@@ -174,7 +174,7 @@ choices where R Core is mixed:
 |------------|---------------|-----------------|------------------|
 | Assignment | 100% `<-` | `<-` | — |
 | Control flow braces | 59% bare, 41% braced | bare | `control_braces = TRUE` |
-| `} else` placement | 70% same line | same line | `else_same_line = FALSE` |
+| `} else` placement | 70% same line | same line | `join_else = FALSE` |
 | Brace style | ~53% K&R, ~47% Allman | K&R | `brace_style = "allman"` |
 | `function` spacing | 96% no space | no space | `function_space = TRUE` |
 | Indentation | 89% spaces, 11% tabs | 4 spaces | `indent = "\t"` |

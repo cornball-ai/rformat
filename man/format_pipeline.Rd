@@ -4,7 +4,7 @@
 \title{AST-Based Format Pipeline}
 \usage{
 format_pipeline(code, indent, wrap, expand_if, brace_style, line_limit,
-                function_space = FALSE, control_braces = FALSE)
+                function_space = FALSE, control_braces = FALSE, join_else = TRUE)
 }
 \arguments{
 \item{code}{Code string for one top-level expression.}
@@ -22,6 +22,8 @@ format_pipeline(code, indent, wrap, expand_if, brace_style, line_limit,
 \item{function_space}{Add space after `function`.}
 
 \item{control_braces}{Control brace mode.}
+
+\item{join_else}{If TRUE, move else to same line as preceding `\}`.}
 }
 \value{
 Formatted code string.

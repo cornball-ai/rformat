@@ -27,6 +27,7 @@ struct FormatOptions {
     int line_limit;
     bool function_space;
     std::string control_braces; // "" for FALSE, "single", "multi", "next_line", "same_line"
+    bool join_else;
 };
 
 // Sort tokens by (out_line, out_order)
@@ -145,5 +146,7 @@ void add_control_braces(std::vector<Token>& tokens, const FormatOptions& opts);
 void expand_call_if_args(std::vector<Token>& tokens,
                          const FormatOptions& opts);
 void reformat_inline_if(std::vector<Token>& tokens, const FormatOptions& opts);
+void join_else_transform(std::vector<Token>& tokens,
+                         const FormatOptions& opts);
 
 #endif

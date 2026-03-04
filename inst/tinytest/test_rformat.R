@@ -232,9 +232,36 @@ expect_equal(
 )
 
 # else_same_line = FALSE inside braces (where } \n else does parse)
+# Also need join_else = FALSE to preserve the separate-line layout
 expect_equal(
-  rformat("{\nif (x) {\n  y\n}\nelse {\n  z\n}\n}", else_same_line = FALSE),
+  rformat("{\nif (x) {\n  y\n}\nelse {\n  z\n}\n}",
+          else_same_line = FALSE, join_else = FALSE),
   "{\n    if (x) {\n        y\n    }\n    else {\n        z\n    }\n}\n"
+)
+
+# join_else = TRUE (default) moves else to same line as }
+expect_equal(
+  rformat("{\nif (x) {\n  y\n}\nelse {\n  z\n}\n}"),
+  "{\n    if (x) {\n        y\n    } else {\n        z\n    }\n}\n"
+)
+
+# join_else = FALSE preserves } / else on separate lines
+expect_equal(
+  rformat("{\nif (x) {\n  y\n}\nelse {\n  z\n}\n}", join_else = FALSE),
+  "{\n    if (x) {\n        y\n    }\n    else {\n        z\n    }\n}\n"
+)
+
+# join_else skips when comment between } and else
+expect_equal(
+  rformat("{\nif (x) {\n  y\n} # comment\nelse {\n  z\n}\n}",
+          join_else = TRUE),
+  "{\n    if (x) {\n        y\n    } # comment\n    else {\n        z\n    }\n}\n"
+)
+
+# join_else with nested if-else chains
+expect_equal(
+  rformat("{\nif (x) {\n  1\n}\nelse if (y) {\n  2\n}\nelse {\n  3\n}\n}"),
+  "{\n    if (x) {\n        1\n    } else if (y) {\n        2\n    } else {\n        3\n    }\n}\n"
 )
 
 # Trailing whitespace removal
