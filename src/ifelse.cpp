@@ -252,7 +252,7 @@ void expand_call_if_args(std::vector<Token>& tokens, const FormatOptions& opts) 
                 tokens[else_idx].out_order - 0.5));
             tokens.push_back(make_token("'{'", "{", base_line + 2,
                 tokens[else_idx].out_order + 0.5));
-            int false_first_order = (false_start < n) ?
+            double false_first_order = (false_start < n) ?
                 tokens[false_start].out_order - 0.5 : 0.5;
             tokens.push_back(make_token("'}'", "}", base_line + 4,
                 false_first_order));
