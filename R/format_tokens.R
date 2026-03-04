@@ -18,13 +18,14 @@
 #' @param line_limit Maximum line length before wrapping (default 80).
 #' @param function_space If TRUE, add space before `(` in function definitions.
 #' @param control_braces If TRUE, add braces to bare one-line control flow bodies.
+#' @param join_else If TRUE, move else to same line as preceding `}`.
 #' @return Formatted code as character string.
 #' @importFrom utils getParseData
 #' @keywords internal
 format_tokens <- function(code, indent = 4L, wrap = "paren",
                           expand_if = FALSE, brace_style = "kr",
                           line_limit = 80L, function_space = FALSE,
-                          control_braces = FALSE) {
+                          control_braces = FALSE, join_else = TRUE) {
     if (is.character(indent)) {
         indent_str <- indent
     } else {
@@ -43,7 +44,7 @@ format_tokens <- function(code, indent = 4L, wrap = "paren",
     if (is.loaded("_rformat_cpp_format_all")) {
         return(cpp_format_all(code, indent_str, wrap, expand_if,
                               brace_style, line_limit, function_space,
-                              cb_str))
+                              cb_str, join_else))
     }
 
     # Pure R fallback: split into top-level expressions, format each
@@ -57,7 +58,7 @@ format_tokens <- function(code, indent = 4L, wrap = "paren",
             parts[i] <- format_pipeline(chunks[[i]]$text, indent_str,
                                         wrap, expand_if, brace_style,
                                         line_limit, function_space,
-                                        control_braces)
+                                        control_braces, join_else)
         }
     }
     result <- paste(parts, collapse = "\n")

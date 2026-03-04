@@ -5,7 +5,7 @@
 \usage{
 rformat(code, indent = 4L, line_limit = 80L, wrap = "paren",
         brace_style = "kr", control_braces = FALSE, expand_if = FALSE,
-        else_same_line = TRUE, function_space = FALSE)
+        else_same_line = TRUE, function_space = FALSE, join_else = TRUE)
 }
 \arguments{
 \item{code}{Character string of R code to format.}
@@ -27,12 +27,17 @@ matches R Core source code where 59\% of control flow bodies are bare.}
 
 \item{expand_if}{Expand inline if-else to multi-line (default FALSE).}
 
-\item{else_same_line}{If TRUE (default), fix `\}\\nelse` to `\} else \{` on
-the same line. Matches R Core source code where 70\% use same-line else.}
+\item{else_same_line}{If TRUE (default), repair top-level `\}\\nelse`
+(which is a parse error in R) by joining to `\} else` before formatting.
+When FALSE, unparseable input is returned unchanged with a warning.}
 
 \item{function_space}{If TRUE, add space before `(` in function definitions:
 `function (x)` instead of `function(x)`. Default FALSE matches 96\% of
 R Core source code.}
+
+\item{join_else}{If TRUE (default), move `else` to the same line as the
+preceding `\}`: `\} else \{`. Matches R Core source code where 70\%
+use same-line else. When FALSE, `\}\\nelse` on separate lines is preserved.}
 }
 \value{
 Formatted code as a character string.

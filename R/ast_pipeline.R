@@ -11,11 +11,12 @@
 #' @param line_limit Maximum line length.
 #' @param function_space Add space after `function`.
 #' @param control_braces Control brace mode.
+#' @param join_else If TRUE, move else to same line as preceding `}`.
 #' @return Formatted code string.
 #' @keywords internal
 format_pipeline <- function(code, indent, wrap, expand_if, brace_style,
                             line_limit, function_space = FALSE,
-                            control_braces = FALSE) {
+                            control_braces = FALSE, join_else = TRUE) {
     if (is.numeric(indent)) {
         indent_str <- strrep(" ", indent)
     } else {
@@ -88,6 +89,10 @@ format_pipeline <- function(code, indent, wrap, expand_if, brace_style,
         terms <- wrap_long_operators(terms, indent_str, line_limit)
         terms <- collapse_calls(terms, indent_str, line_limit)
         terms <- recompute_nesting(terms)
+    }
+
+    if (isTRUE(join_else)) {
+        terms <- join_else_transform(terms, indent_str, line_limit)
     }
 
     serialize_tokens(terms, indent_str, wrap, line_limit)

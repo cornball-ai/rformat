@@ -125,6 +125,10 @@ static void run_pipeline_transforms(std::vector<Token>& tokens,
         TIMED("collapse_calls_3", collapse_calls(tokens, opts));
         TIMED("recompute_3", recompute_nesting(tokens));
     }
+
+    if (opts.join_else) {
+        TIMED("join_else", join_else_transform(tokens, opts));
+    }
 }
 
 // [[Rcpp::export]]
@@ -135,7 +139,8 @@ Rcpp::String cpp_format_pipeline(std::string code,
                                  std::string brace_style,
                                  int line_limit,
                                  bool function_space,
-                                 std::string control_braces) {
+                                 std::string control_braces,
+                                 bool join_else) {
     // Parse code via R
     Rcpp::Function parse_fn("parse");
     Rcpp::Function getParseData_fn("getParseData");
@@ -177,6 +182,7 @@ Rcpp::String cpp_format_pipeline(std::string code,
     opts.line_limit = line_limit;
     opts.function_space = function_space;
     opts.control_braces = control_braces;
+    opts.join_else = join_else;
 
     run_pipeline_transforms(tokens, opts);
 
@@ -192,7 +198,8 @@ Rcpp::String cpp_format_all(std::string code,
                             std::string brace_style,
                             int line_limit,
                             bool function_space,
-                            std::string control_braces) {
+                            std::string control_braces,
+                            bool join_else) {
     // Parse full code once
     Rcpp::Function parse_fn("parse");
     Rcpp::Function getParseData_fn("getParseData");
@@ -275,6 +282,7 @@ Rcpp::String cpp_format_all(std::string code,
     opts.line_limit = line_limit;
     opts.function_space = function_space;
     opts.control_braces = control_braces;
+    opts.join_else = join_else;
 
     // Collect terminal tokens per expression, with adjusted line numbers
     std::vector<std::vector<Token>> expr_tokens(merged.size());

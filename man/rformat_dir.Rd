@@ -6,7 +6,7 @@
 rformat_dir(path = ".", recursive = TRUE, dry_run = FALSE, indent = 4L,
             line_limit = 80L, wrap = "paren", brace_style = "kr",
             control_braces = FALSE, expand_if = FALSE, else_same_line = TRUE,
-            function_space = FALSE)
+            function_space = FALSE, join_else = TRUE)
 }
 \arguments{
 \item{path}{Path to directory.}
@@ -31,11 +31,15 @@ bodies. Default FALSE matches R Core majority style.}
 
 \item{expand_if}{Expand inline if-else to multi-line (default FALSE).}
 
-\item{else_same_line}{If TRUE (default), fix `\}\\nelse` to `\} else \{`.}
+\item{else_same_line}{If TRUE (default), repair top-level `\}\\nelse`
+(which is a parse error in R) by joining to `\} else` before formatting.}
 
 \item{function_space}{If TRUE, add space before `(` in function definitions:
 `function (x)` instead of `function(x)`. Default FALSE matches 96\% of
 R Core source code.}
+
+\item{join_else}{If TRUE (default), move `else` to the same line as the
+preceding `\}`.}
 }
 \value{
 Invisibly returns vector of modified file paths.

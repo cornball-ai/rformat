@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cpp_format_pipeline
-Rcpp::String cpp_format_pipeline(std::string code, std::string indent_str, std::string wrap, bool expand_if, std::string brace_style, int line_limit, bool function_space, std::string control_braces);
-RcppExport SEXP _rformat_cpp_format_pipeline(SEXP codeSEXP, SEXP indent_strSEXP, SEXP wrapSEXP, SEXP expand_ifSEXP, SEXP brace_styleSEXP, SEXP line_limitSEXP, SEXP function_spaceSEXP, SEXP control_bracesSEXP) {
+Rcpp::String cpp_format_pipeline(std::string code, std::string indent_str, std::string wrap, bool expand_if, std::string brace_style, int line_limit, bool function_space, std::string control_braces, bool join_else);
+RcppExport SEXP _rformat_cpp_format_pipeline(SEXP codeSEXP, SEXP indent_strSEXP, SEXP wrapSEXP, SEXP expand_ifSEXP, SEXP brace_styleSEXP, SEXP line_limitSEXP, SEXP function_spaceSEXP, SEXP control_bracesSEXP, SEXP join_elseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,13 +24,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type line_limit(line_limitSEXP);
     Rcpp::traits::input_parameter< bool >::type function_space(function_spaceSEXP);
     Rcpp::traits::input_parameter< std::string >::type control_braces(control_bracesSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_format_pipeline(code, indent_str, wrap, expand_if, brace_style, line_limit, function_space, control_braces));
+    Rcpp::traits::input_parameter< bool >::type join_else(join_elseSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_format_pipeline(code, indent_str, wrap, expand_if, brace_style, line_limit, function_space, control_braces, join_else));
     return rcpp_result_gen;
 END_RCPP
 }
 // cpp_format_all
-Rcpp::String cpp_format_all(std::string code, std::string indent_str, std::string wrap, bool expand_if, std::string brace_style, int line_limit, bool function_space, std::string control_braces);
-RcppExport SEXP _rformat_cpp_format_all(SEXP codeSEXP, SEXP indent_strSEXP, SEXP wrapSEXP, SEXP expand_ifSEXP, SEXP brace_styleSEXP, SEXP line_limitSEXP, SEXP function_spaceSEXP, SEXP control_bracesSEXP) {
+Rcpp::String cpp_format_all(std::string code, std::string indent_str, std::string wrap, bool expand_if, std::string brace_style, int line_limit, bool function_space, std::string control_braces, bool join_else);
+RcppExport SEXP _rformat_cpp_format_all(SEXP codeSEXP, SEXP indent_strSEXP, SEXP wrapSEXP, SEXP expand_ifSEXP, SEXP brace_styleSEXP, SEXP line_limitSEXP, SEXP function_spaceSEXP, SEXP control_bracesSEXP, SEXP join_elseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -42,7 +43,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type line_limit(line_limitSEXP);
     Rcpp::traits::input_parameter< bool >::type function_space(function_spaceSEXP);
     Rcpp::traits::input_parameter< std::string >::type control_braces(control_bracesSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_format_all(code, indent_str, wrap, expand_if, brace_style, line_limit, function_space, control_braces));
+    Rcpp::traits::input_parameter< bool >::type join_else(join_elseSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_format_all(code, indent_str, wrap, expand_if, brace_style, line_limit, function_space, control_braces, join_else));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -58,8 +60,8 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_rformat_cpp_format_pipeline", (DL_FUNC) &_rformat_cpp_format_pipeline, 8},
-    {"_rformat_cpp_format_all", (DL_FUNC) &_rformat_cpp_format_all, 8},
+    {"_rformat_cpp_format_pipeline", (DL_FUNC) &_rformat_cpp_format_pipeline, 9},
+    {"_rformat_cpp_format_all", (DL_FUNC) &_rformat_cpp_format_all, 9},
     {"_rformat_cpp_set_trace", (DL_FUNC) &_rformat_cpp_set_trace, 1},
     {NULL, NULL, 0}
 };
