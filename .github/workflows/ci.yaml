@@ -41,4 +41,5 @@ jobs:
           GITHUB_PAT: ${{ github.token }}
         run: |
           Rscript -e 'remotes::install_github("cornball-ai/tinyelf")'
+          Rscript -e 'install.packages(".", repos = NULL, type = "source")'
           Rscript -e 'tinyelf::audit_so(system.file("libs", package = "rformat"))'
