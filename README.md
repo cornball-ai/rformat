@@ -13,6 +13,9 @@ vector (C++) or DataFrame (R).
 ## Installation
 
 ```r
+install.packages("rformat")
+
+# Development version
 remotes::install_github("cornball-ai/rformat")
 ```
 
