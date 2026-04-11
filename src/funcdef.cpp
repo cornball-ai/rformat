@@ -134,12 +134,41 @@ void reformat_function_defs(std::vector<Token>& tokens,
                     need_change = true;
                 if (!need_change) continue;
 
+                // Record the last line the signature currently occupies so we
+                // can close any gap between the collapsed signature and a
+                // bare (braceless) body.
+                int old_sig_end_line = tokens[fi].out_line;
+                for (int k = fi; k <= close_idx; k++) {
+                    if (tokens[k].out_line > old_sig_end_line)
+                        old_sig_end_line = tokens[k].out_line;
+                }
+                for (int c : comma_indices) {
+                    if (tokens[c].out_line > old_sig_end_line)
+                        old_sig_end_line = tokens[c].out_line;
+                }
+
                 for (int k = fi; k <= close_idx; k++)
                     tokens[k].out_line = func_line;
                 for (int c : comma_indices)
                     tokens[c].out_line = func_line;
                 if (has_brace)
                     tokens[brace_idx].out_line = func_line;
+
+                // Close the gap for a bare-body function: shift any tokens
+                // that lived on the old signature's trailing lines up so the
+                // body stays adjacent to the collapsed signature.
+                if (!has_brace && old_sig_end_line > func_line) {
+                    int shift = old_sig_end_line - func_line;
+                    for (int k = 0; k < n; k++) {
+                        if (tokens[k].out_line >= old_sig_end_line + 1) {
+                            tokens[k].out_line -= shift;
+                        } else if (tokens[k].out_line == old_sig_end_line) {
+                            // Body tokens that shared the old close-paren
+                            // line now belong on func_line.
+                            tokens[k].out_line = func_line;
+                        }
+                    }
+                }
 
                 reorder_tokens(tokens);
                 changed = true;
