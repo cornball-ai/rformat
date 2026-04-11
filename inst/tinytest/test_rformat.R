@@ -50,6 +50,20 @@ expect_true(
   info = "Inline function body should be preserved"
 )
 
+# Multi-line function header + bare if body + expand_if (regression)
+# The signature collapse used to leave blank lines between function(...)
+# and the body, making it look like two separate statements.
+code <- "`%||%` <- function(\n  x,\n  y\n) if (is.null(x)) y else x"
+result <- rformat(code, control_braces = "multi", expand_if = TRUE)
+expect_true(
+  !is.null(tryCatch(parse(text = result), error = function(e) NULL)),
+  info = "Collapsed signature with bare if body should still parse"
+)
+expect_false(
+  grepl("function\\(x, y\\)\\s*\\n\\s*\\n", result),
+  info = "No blank line should separate collapsed signature from its bare body"
+)
+
 # Nested parentheses collapse (regression test)
 # Short nested calls should collapse to a single line
 code <- "tryCatch(
