@@ -99,23 +99,36 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
             int open_idx = ci + 1;
             if (open_idx >= n || tokens[open_idx].token != "'('") continue;
 
+            int close_idx = find_matching_paren(tokens, open_idx);
+            if (close_idx < 0) continue;
+
             int call_line = tokens[ci].out_line;
-            if (lidx.width(tokens, call_line, opts.indent_str,
+            bool already_wrapped =
+                (tokens[close_idx].out_line != call_line);
+            // Re-pack already-wrapped calls so the first arg lands on
+            // the call line. A call that's already single-line and
+            // fits within the limit needs no work.
+            if (!already_wrapped &&
+                lidx.width(tokens, call_line, opts.indent_str,
                            opts.function_space) <= opts.line_limit)
                 continue;
 
-            int close_idx = find_matching_paren(tokens, open_idx);
-            if (close_idx < 0) continue;
-            if (tokens[close_idx].out_line != call_line) continue;
 
-            // Skip calls with braces
+            // Skip calls with braces or comments. Comments need their
+            // own line, so collapsing/re-packing would corrupt them;
+            // collapse_calls has the same guard.
             bool has_braces = false;
+            bool has_comment = false;
             for (int k = open_idx; k <= close_idx; k++) {
                 if (tokens[k].token == "'{'" || tokens[k].token == "'}'") {
-                    has_braces = true; break;
+                    has_braces = true;
                 }
+                if (tokens[k].token == "COMMENT") {
+                    has_comment = true;
+                }
+                if (has_braces && has_comment) break;
             }
-            if (has_braces) continue;
+            if (has_braces || has_comment) continue;
 
             // Skip semicolons on line
             const std::vector<int>& line_idx = lidx.get(call_line);
@@ -305,7 +318,54 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                 }
             }
 
-            if (lines_inserted == 0) continue;
+            // Capture the original close-line before any mutation so we
+            // can compute the delta for trailing tokens. For an
+            // already-wrapped call, old_close_line > call_line.
+            int old_close_line = tokens[close_idx].out_line;
+            int new_close_line = call_line + arg_line_offset.back();
+
+            // Already-wrapped calls reach this point even when
+            // lines_inserted == 0 (everything fits on one line),
+            // because we want to collapse them. For never-wrapped
+            // calls, lines_inserted == 0 means no work to do.
+            if (lines_inserted == 0 && !already_wrapped) continue;
+
+            // Don't re-pack an already-wrapped call if the first arg
+            // alone won't fit on the call line within the limit, or
+            // if any resulting line would exceed the limit. Pulling
+            // the first arg up only helps when it actually makes the
+            // call more compact; for deeply-nested calls with huge
+            // args, the greedy packer would otherwise produce
+            // grotesque jam-onto-call-line output.
+            if (already_wrapped) {
+                bool repack_ok = true;
+                if (first_line_w + arg_widths[0] +
+                    (arg_groups.size() > 1 ? 2 : 1) > opts.line_limit) {
+                    repack_ok = false;
+                }
+                if (repack_ok) {
+                    // Re-walk arg_line_offset to check each resulting
+                    // line's width.
+                    int line_w = first_line_w;
+                    int cur_offset = 0;
+                    bool first = true;
+                    for (size_t ai = 0; ai < arg_groups.size() && repack_ok;
+                         ai++) {
+                        int extra = (ai < arg_groups.size() - 1) ? 2 : 1;
+                        if (arg_line_offset[ai] != cur_offset) {
+                            cur_offset = arg_line_offset[ai];
+                            line_w = cont_width + arg_widths[ai] + extra;
+                            first = false;
+                        } else {
+                            int space_w = first ? 0 : 1;
+                            line_w += space_w + arg_widths[ai] + extra;
+                            first = false;
+                        }
+                        if (line_w > opts.line_limit) repack_ok = false;
+                    }
+                }
+                if (!repack_ok) continue;
+            }
 
             // Pass 2: apply line assignments
             std::set<int> all_call_idx_set;
@@ -314,11 +374,31 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
             for (int k : comma_indices) all_call_idx_set.insert(k);
             all_call_idx_set.insert(close_idx);
 
-            // Shift later tokens
-            for (int k = 0; k < n; k++) {
-                if (tokens[k].out_line > call_line &&
-                    all_call_idx_set.find(k) == all_call_idx_set.end()) {
-                    tokens[k].out_line += lines_inserted;
+            // Capture tokens trailing the close paren on its current
+            // line BEFORE the shift pass — otherwise we'd pick up
+            // tokens that get shifted INTO old_close_line.
+            std::vector<int> old_close_trailing;
+            if (already_wrapped) {
+                for (int k = 0; k < n; k++) {
+                    if (tokens[k].out_line == old_close_line &&
+                        tokens[k].out_order > tokens[close_idx].out_order &&
+                        all_call_idx_set.find(k) == all_call_idx_set.end()) {
+                        old_close_trailing.push_back(k);
+                    }
+                }
+            }
+
+            // Shift later tokens by (new_close_line - old_close_line).
+            // For never-wrapped this is +lines_inserted; for
+            // already-wrapped it can be negative (call now spans fewer
+            // lines than before).
+            int line_delta = new_close_line - old_close_line;
+            if (line_delta != 0) {
+                for (int k = 0; k < n; k++) {
+                    if (tokens[k].out_line > old_close_line &&
+                        all_call_idx_set.find(k) == all_call_idx_set.end()) {
+                        tokens[k].out_line += line_delta;
+                    }
                 }
             }
 
@@ -334,7 +414,10 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
             int last_offset = arg_line_offset.back();
             tokens[close_idx].out_line = call_line + last_offset;
 
-            // Move trailing tokens
+            // Move trailing tokens on the call's first line (stuff
+            // after `)` on call_line, for never-wrapped) and on the
+            // old close line (for already-wrapped) to the new close
+            // line.
             if (last_offset > 0) {
                 for (int k : line_idx) {
                     if (tokens[k].out_order > tokens[close_idx].out_order &&
@@ -342,6 +425,9 @@ void wrap_long_calls(std::vector<Token>& tokens, const FormatOptions& opts) {
                         tokens[k].out_line = call_line + last_offset;
                     }
                 }
+            }
+            for (int k : old_close_trailing) {
+                tokens[k].out_line = new_close_line;
             }
 
             reorder_tokens(tokens);

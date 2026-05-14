@@ -138,13 +138,8 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
             call_line <- terms$out_line[ci]
 
-            # Only overlong lines
-            if (line_index_width(terms, lidx, call_line,
-                                 indent_str) <= line_limit) {
-                next
-            }
-
-            # Only single-line calls
+            # Locate matching close paren first so we can detect the
+            # already-wrapped case.
             depth <- 1L
             close_idx <- open_idx + 1L
             while (close_idx <= nrow(terms) && depth > 0L) {
@@ -161,13 +156,22 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
             if (close_idx > nrow(terms)) {
                 next
             }
-            if (terms$out_line[close_idx] != call_line) {
+
+            already_wrapped <- terms$out_line[close_idx] != call_line
+
+            # Re-pack already-wrapped calls so the first arg lands on
+            # the call line. A call that's already single-line and
+            # fits the limit needs no work.
+            if (!already_wrapped &&
+                line_index_width(terms, lidx, call_line,
+                                 indent_str) <= line_limit) {
                 next
             }
 
-            # Skip calls with braces
+            # Skip calls containing braces or comments. Comments need
+            # their own line, so re-packing would corrupt them.
             inner <- terms[seq(open_idx, close_idx),]
-            if (any(inner$token %in% c("'{'", "'}'"))) {
+            if (any(inner$token %in% c("'{'", "'}'", "COMMENT"))) {
                 next
             }
 
@@ -416,18 +420,83 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
                 }
             }
 
-            if (lines_inserted == 0L) {
+            # Capture the original close-paren line BEFORE any
+            # mutation so we can compute the line delta for trailing
+            # tokens. For an already-wrapped call, old_close_line >
+            # call_line.
+            old_close_line <- terms$out_line[close_idx]
+            new_close_line <-
+            call_line + arg_line_offset[length(arg_groups)]
+
+            # Already-wrapped calls reach this point even when
+            # lines_inserted == 0 (everything fits on one line),
+            # because we want to collapse them. Never-wrapped calls
+            # with lines_inserted == 0 need no work.
+            if (lines_inserted == 0L && !already_wrapped) {
                 next
+            }
+
+            # Don't re-pack an already-wrapped call if the first arg
+            # alone won't fit on the call line, or if any resulting
+            # line would exceed the limit. For deeply-nested calls
+            # with huge args the greedy packer would otherwise
+            # produce grotesque jam-onto-call-line output.
+            if (already_wrapped) {
+                repack_ok <- TRUE
+                extra1 <- if (length(arg_groups) > 1L) 2L else 1L
+                if (first_line_w + arg_widths[1] + extra1 > line_limit) {
+                    repack_ok <- FALSE
+                }
+                if (repack_ok) {
+                    line_w <- first_line_w
+                    cur_offset <- 0L
+                    first <- TRUE
+                    for (ai in seq_along(arg_groups)) {
+                        extra <- if (ai < length(arg_groups)) 2L else 1L
+                        if (arg_line_offset[ai] != cur_offset) {
+                            cur_offset <- arg_line_offset[ai]
+                            line_w <- cont_width + arg_widths[ai] + extra
+                            first <- FALSE
+                        } else {
+                            space_w <- if (first) 0L else 1L
+                            line_w <- line_w + space_w + arg_widths[ai] + extra
+                            first <- FALSE
+                        }
+                        if (line_w > line_limit) {
+                            repack_ok <- FALSE
+                            break
+                        }
+                    }
+                }
+                if (!repack_ok) {
+                    next
+                }
             }
 
             # Pass 2: apply line assignments
             # Collect all call-internal token indices
             all_call_idx <- c(unlist(arg_groups), comma_indices, close_idx)
 
-            # Shift everything after call_line down by lines_inserted
-            later <- terms$out_line > call_line &
-            !(seq_len(nrow(terms)) %in% all_call_idx)
-            terms$out_line[later] <- terms$out_line[later] + lines_inserted
+            # Capture tokens trailing the close paren BEFORE the shift
+            # pass — otherwise we'd pick up tokens that get shifted
+            # INTO old_close_line.
+            old_close_trailing <- integer(0)
+            if (already_wrapped) {
+                old_close_trailing <- which(
+                    terms$out_line == old_close_line &
+                    terms$out_order > terms$out_order[close_idx] &
+                    !(seq_len(nrow(terms)) %in% all_call_idx))
+            }
+
+            # Shift later tokens by (new_close_line - old_close_line).
+            # For never-wrapped this is +lines_inserted; for
+            # already-wrapped it can be negative.
+            line_delta <- new_close_line - old_close_line
+            if (line_delta != 0L) {
+                later <- terms$out_line > old_close_line &
+                !(seq_len(nrow(terms)) %in% all_call_idx)
+                terms$out_line[later] <- terms$out_line[later] + line_delta
+            }
 
             # Place args and commas
             for (ai in seq_along(arg_groups)) {
@@ -440,17 +509,20 @@ wrap_long_calls <- function(terms, indent_str, wrap = "paren",
 
             # Place ) on same line as last arg
             last_offset <- arg_line_offset[length(arg_groups)]
-            terms$out_line[close_idx] <- call_line + last_offset
+            terms$out_line[close_idx] <- new_close_line
 
-            # Move trailing tokens on call_line after close paren to
-            # the close paren's line
+            # Move trailing tokens (stuff after `)` on call_line for
+            # never-wrapped calls, or on old_close_line for already-
+            # wrapped) to the new close-paren line.
             if (last_offset > 0L) {
                 trailing <- line_idx[
                     terms$out_order[line_idx] >
                     terms$out_order[close_idx] &
                     !line_idx %in% all_call_idx]
-                terms$out_line[trailing] <-
-                call_line + last_offset
+                terms$out_line[trailing] <- new_close_line
+            }
+            if (length(old_close_trailing) > 0L) {
+                terms$out_line[old_close_trailing] <- new_close_line
             }
 
             terms <- terms[order(terms$out_line, terms$out_order),]
