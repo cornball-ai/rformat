@@ -698,3 +698,56 @@ expect_equal(
   r_sl, r_sl2,
   info = "next_line single-line bare body with ELSE should be idempotent"
 )
+
+# --- wrap = "paren" re-packs already-wrapped calls ---
+# Regression for the case where a call was previously formatted as
+#   funcname(
+#       arg1,
+#       arg2
+#   )
+# rformat used to leave the `(`-newline structure alone and just
+# apply the paren-column indent to the orphaned args, producing
+# hyper-indented output. The fix re-packs the call so the first arg
+# lands on the call line.
+
+# Case 1: short already-wrapped call collapses inline.
+expect_equal(
+    rformat("fn(\n    a,\n    b\n)", wrap = "paren"),
+    "fn(a, b)\n"
+)
+
+# Case 2: already-wrapped call that needs to wrap puts the first
+# arg on the call line and aligns subsequent args under it.
+src <- "fn <- function() {\n    new_session(\n        channel = \"console\",\n        provider = provider,\n        tools_filter = tools_filter\n    )\n}"
+out <- rformat(src, wrap = "paren")
+# First arg must be on the same line as the open paren.
+expect_true(
+    grepl("new_session\\(channel = ", out),
+    info = "First arg should be pulled onto the call line"
+)
+# Closing `)` must tuck against the last arg, not sit alone.
+expect_false(
+    grepl("\n\\s*\\)\n", out),
+    info = "Closing paren should not sit alone on its own line"
+)
+# No blank line should be left between the call and the surrounding `}`.
+expect_false(
+    grepl("\n\n}", out),
+    info = "No blank line left over from the old close-paren line"
+)
+
+# Case 3: already-wrapped call containing a comment must stay
+# multi-line — the existing behavior should be preserved.
+src_comment <- "fn(\n    a,  # explain a\n    b\n)"
+out_comment <- rformat(src_comment, wrap = "paren")
+expect_true(
+    grepl("\n", trimws(out_comment, "right")),
+    info = "Calls with comments must stay multi-line after the fix"
+)
+
+# Case 4: trailing content after `)` (assignment + arithmetic) is
+# preserved on the same line as the close paren.
+expect_equal(
+    rformat("x <- foo(\n    a = 1,\n    b = 2\n) + 1", wrap = "paren"),
+    "x <- foo(a = 1, b = 2) + 1\n"
+)
