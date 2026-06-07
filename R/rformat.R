@@ -147,7 +147,9 @@ rformat_file <- function(path, output = NULL, dry_run = FALSE, indent = 4L,
         } else {
             out_path <- output
         }
-        writeLines(formatted, out_path)
+        # rformat() returns a string with a single trailing newline; writeLines
+        # adds its own, so strip ours to avoid a blank line at EOF (#33).
+        writeLines(sub("\n+$", "", formatted), out_path)
     }
 
     invisible(formatted)
@@ -213,10 +215,14 @@ rformat_dir <- function(path = ".", recursive = TRUE, dry_run = FALSE,
                              else_same_line = else_same_line,
                              join_else = join_else)
 
-        if (formatted != original) {
+        # rformat() ends with a single trailing newline that writeLines would
+        # double; strip it so already-clean files aren't flagged as modified
+        # and we don't add a blank line at EOF (#32).
+        out <- sub("\n+$", "", formatted)
+        if (out != original) {
             modified <- c(modified, f)
             if (!dry_run) {
-                writeLines(formatted, f)
+                writeLines(out, f)
                 message("Formatted: ", f)
             } else {
                 message("Would format: ", f)

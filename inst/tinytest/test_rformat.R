@@ -751,3 +751,46 @@ expect_equal(
     rformat("x <- foo(\n    a = 1,\n    b = 2\n) + 1", wrap = "paren"),
     "x <- foo(a = 1, b = 2) + 1\n"
 )
+
+
+# --- EOF handling: no blank line appended at end of file (#32, #33) ---
+
+read_raw <- function(p) readChar(p, file.info(p)$size, useBytes = TRUE)
+
+# rformat_file() writes exactly one trailing newline, not two (#33)
+tmp_f <- tempfile(fileext = ".R")
+writeLines(c("f <- function() {", "    1", "}"), tmp_f)
+rformat_file(tmp_f, control_braces = "multi", expand_if = TRUE)
+raw_f <- read_raw(tmp_f)
+expect_false(grepl("\n\n$", raw_f))
+expect_true(grepl("\n$", raw_f))
+expect_equal(tail(readLines(tmp_f, warn = FALSE), 1), "}")
+unlink(tmp_f)
+
+# rformat_dir() does not append a blank line, and leaves an already-clean
+# file untouched (not flagged as modified) (#32)
+tmp_d <- tempfile()
+dir.create(file.path(tmp_d, "R"), recursive = TRUE)
+clean <- file.path(tmp_d, "R", "clean.R")
+writeLines(c("f <- function() {", "    1", "}"), clean)
+before <- read_raw(clean)
+
+mod1 <- rformat_dir(file.path(tmp_d, "R"), control_braces = "multi",
+                    expand_if = TRUE)
+expect_false(clean %in% mod1)          # already clean -> not modified
+expect_equal(read_raw(clean), before)  # bytes unchanged
+expect_false(grepl("\n\n$", read_raw(clean)))
+
+# A messy file gets formatted with a single trailing newline (no blank line)
+messy <- file.path(tmp_d, "R", "messy.R")
+writeLines("x<-1", messy)
+rformat_dir(file.path(tmp_d, "R"), control_braces = "multi", expand_if = TRUE)
+raw_m <- read_raw(messy)
+expect_false(grepl("\n\n$", raw_m))
+expect_true(grepl("\n$", raw_m))
+
+# Idempotence: a second pass changes nothing
+mod2 <- rformat_dir(file.path(tmp_d, "R"), control_braces = "multi",
+                    expand_if = TRUE)
+expect_false(messy %in% mod2)
+unlink(tmp_d, recursive = TRUE)
