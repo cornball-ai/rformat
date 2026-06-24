@@ -1,30 +1,25 @@
 ## Submission
 
-This is an update to the CRAN release 0.1.0, collecting formatting and
-documentation fixes:
+This is an update to the CRAN release 0.1.0, collecting formatting fixes:
 
 * `wrap_long_calls()` re-packs an already-wrapped call so its first argument
   lands on the call line (#30); the gap between a collapsed signature and a
   bare body is closed (#29); `rformat_file()` / `rformat_dir()` no longer
   append a trailing blank line (#34).
-* Fixed a literal-conversion warning and a codoc mismatch (#25).
-* Added a formatting-options vignette and refreshed the existing ones (#23).
 
 See NEWS.md for the full list.
 
 ## Test environments
 
 * local: Ubuntu 24.04, R 4.5.x
-* win-builder: R-devel and R-release
 
 ## R CMD check results
 
 0 errors | 0 warnings | 1 note
 
 * The note is "non-portable compilation flags", produced by the local system
-  R configuration (the CFLAGS Debian/Ubuntu sets), not by the package; it does
-  not appear on win-builder. Installed size is ~6 Mb, the Rcpp-compiled shared
-  library.
+  R configuration (the CFLAGS Debian/Ubuntu sets), not by the package.
+  Installed size is ~6 Mb, the Rcpp-compiled shared library.
 
 ## Additional testing
 
