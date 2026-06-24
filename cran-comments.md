@@ -11,7 +11,7 @@ See NEWS.md for the full list.
 
 ## Test environments
 
-* local: Ubuntu 24.04, R 4.5.x
+* local: Ubuntu 24.04, R 4.6.0
 
 ## R CMD check results
 
