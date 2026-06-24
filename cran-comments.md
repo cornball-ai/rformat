@@ -23,8 +23,8 @@ See NEWS.md for the full list.
 
 ## Additional testing
 
-rformat's test suite covers idempotency and parse round-trip behaviour. The
-0.1.0 release was additionally stress-tested against all R files from 126 CRAN
+rformat's test suite covers idempotency and parse round-trip behaviour. This
+0.2.0 release was additionally stress-tested against all R files from 126 CRAN
 and base R packages with randomized style parameters (0 parse failures, 0
 idempotency exceptions).
 
