@@ -46,6 +46,16 @@ void join_else_transform(std::vector<Token>& tokens,
             tokens[k].out_line = rbrace_line;
         }
 
+        // Joining removes the old ELSE line. Shift continuation lines and all
+        // later code up by the same amount so the serializer does not emit a
+        // blank line where ELSE used to be.
+        int line_delta = else_line - rbrace_line;
+        for (int k = 0; k < n; k++) {
+            if (tokens[k].out_line > else_line) {
+                tokens[k].out_line -= line_delta;
+            }
+        }
+
         // Rebuild line index since lines changed
         lidx.build(tokens);
     }
