@@ -57,6 +57,13 @@ join_else_transform <- function(terms, indent_str, line_limit) {
             terms$out_line[k] <- rbrace_line
             k <- k + 1L
         }
+
+        # Joining removes the old ELSE line. Shift continuation lines and all
+        # later code up by the same amount so the serializer does not emit a
+        # blank line where ELSE used to be.
+        line_delta <- else_line - rbrace_line
+        later <- terms$out_line > else_line
+        terms$out_line[later] <- terms$out_line[later] - line_delta
     }
 
     terms

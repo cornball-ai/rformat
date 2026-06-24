@@ -64,6 +64,22 @@ expect_false(
   info = "No blank line should separate collapsed signature from its bare body"
 )
 
+# Backend parity for #29: the pure-R fallback must also close the gap between
+# a collapsed signature and a bare (braceless) body, matching the C++ backend.
+src <- "foo <- function(alpha,\n                beta)\n  alpha + beta\n"
+r_out <- rformat:::format_pipeline(src, "  ", "fixed", FALSE, "kr",
+                                   80L, FALSE, FALSE, TRUE)
+expect_false(
+  grepl("function\\(alpha, beta\\)\\s*\\n\\s*\\n", r_out),
+  info = "R backend: no blank line between collapsed signature and bare body (#29)"
+)
+expect_equal(
+  rformat:::format_pipeline(r_out, "  ", "fixed", FALSE, "kr",
+                            80L, FALSE, FALSE, TRUE),
+  r_out,
+  info = "R backend: collapsed-signature bare body is idempotent (#29)"
+)
+
 # Nested parentheses collapse (regression test)
 # Short nested calls should collapse to a single line
 code <- "tryCatch(
@@ -270,6 +286,70 @@ expect_equal(
   rformat("{\nif (x) {\n  y\n} # comment\nelse {\n  z\n}\n}",
           join_else = TRUE),
   "{\n    if (x) {\n        y\n    } # comment\n    else {\n        z\n    }\n}\n"
+)
+
+# Joining ELSE must also close the old ELSE line for wrapped continuations.
+# Otherwise pass 1 leaves a blank line that pass 2 removes.
+src <- paste(
+  "f <- function() {",
+  "  if (x) y",
+  "  else if (file.exists(path.expand(paste0(\"prefix-\",",
+  "          Sys.getenv(\"R_PLATFORM\")))))",
+  "    z",
+  "}",
+  sep = "\n"
+)
+opts <- list(control_braces = "next_line", brace_style = "allman",
+             function_space = TRUE, else_same_line = FALSE,
+             wrap = "fixed", indent = 2L, line_limit = 80L)
+out <- do.call(rformat, c(list(src), opts))
+expect_equal(
+  do.call(rformat, c(list(out), opts)),
+  out,
+  info = "Joined else-if with a wrapped condition should be idempotent"
+)
+expect_false(
+  grepl("paste0\\([^\\n]+,\\n\\n", out),
+  info = "Joining else-if should not leave a blank continuation line"
+)
+r_out <- rformat:::format_pipeline(src, "  ", "fixed", FALSE, "allman",
+                                   80L, TRUE, "next_line", TRUE)
+expect_equal(
+  rformat:::format_pipeline(r_out, "  ", "fixed", FALSE, "allman",
+                            80L, TRUE, "next_line", TRUE),
+  r_out,
+  info = "Pure-R joined else-if should be idempotent"
+)
+
+src <- paste(
+  "f <- function(x, digits) {",
+  "    if (x) {",
+  "        y",
+  "    }",
+  "    else cat(\"Concordance= \", format(x$concordance, digits=digits),",
+  "             \" se= \", format(sqrt(x$var), digits=digits), \"\\n\", sep=\"\")",
+  "}",
+  sep = "\n"
+)
+opts <- list(expand_if = TRUE, function_space = TRUE, wrap = "paren",
+             indent = 4L, line_limit = 100L)
+out <- do.call(rformat, c(list(src), opts))
+expect_equal(
+  do.call(rformat, c(list(out), opts)),
+  out,
+  info = "Joined else with a wrapped call should be idempotent"
+)
+expect_false(
+  grepl("se= \",\n\n", out, fixed = TRUE),
+  info = "Joining else should not leave a blank call-continuation line"
+)
+r_out <- rformat:::format_pipeline(src, "    ", "paren", TRUE, "kr",
+                                   100L, TRUE, FALSE, TRUE)
+expect_equal(
+  rformat:::format_pipeline(r_out, "    ", "paren", TRUE, "kr",
+                            100L, TRUE, FALSE, TRUE),
+  r_out,
+  info = "Pure-R joined else call should be idempotent"
 )
 
 # join_else with nested if-else chains

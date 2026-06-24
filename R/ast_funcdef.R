@@ -210,12 +210,33 @@ reformat_function_defs <- function(terms, indent_str = "    ",
                     next
                 }
 
+                # Record the last line the signature currently occupies so we
+                # can close any gap between the collapsed signature and a bare
+                # (braceless) body (mirrors the C++ backend; #29).
+                old_sig_end <- max(terms$out_line[all_range])
+                if (length(comma_indices)) {
+                    old_sig_end <- max(old_sig_end,
+                                       terms$out_line[comma_indices])
+                }
+
                 terms$out_line[all_range] <- target_line
                 for (ci_comma in comma_indices) {
                     terms$out_line[ci_comma] <- target_line
                 }
                 if (has_brace) {
                     terms$out_line[brace_idx] <- target_line
+                }
+
+                # Close the gap for a bare-body function: shift tokens that
+                # lived on the old signature's trailing lines up so the body
+                # stays adjacent to the collapsed signature (mirrors the C++
+                # backend; #29).
+                if (!has_brace && old_sig_end > func_line) {
+                    shift <- old_sig_end - func_line
+                    up <- terms$out_line >= old_sig_end + 1L
+                    on_close <- terms$out_line == old_sig_end
+                    terms$out_line[up] <- terms$out_line[up] - shift
+                    terms$out_line[on_close] <- func_line
                 }
 
                 # Re-sort
