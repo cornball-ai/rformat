@@ -1,18 +1,38 @@
+## Submission
+
+This is an update to the CRAN release 0.1.0, collecting formatting and
+documentation fixes:
+
+* `wrap_long_calls()` re-packs an already-wrapped call so its first argument
+  lands on the call line (#30); the gap between a collapsed signature and a
+  bare body is closed (#29); `rformat_file()` / `rformat_dir()` no longer
+  append a trailing blank line (#34).
+* Fixed a literal-conversion warning and a codoc mismatch (#25).
+* Added a formatting-options vignette and refreshed the existing ones (#23).
+
+See NEWS.md for the full list.
+
 ## Test environments
 
-* Ubuntu 24.04 LTS, R 4.5.2
-* R-hub (via win-builder)
+* local: Ubuntu 24.04, R 4.5.x
+* win-builder: R-devel and R-release
 
 ## R CMD check results
 
-0 errors | 0 warnings | 2 notes
+0 errors | 0 warnings | 1 note
 
-* New submission.
-* Non-portable compilation flags from system R configuration (not
-  package-specific).
+* The note is "non-portable compilation flags", produced by the local system
+  R configuration (the CFLAGS Debian/Ubuntu sets), not by the package; it does
+  not appear on win-builder. Installed size is ~6 Mb, the Rcpp-compiled shared
+  library.
 
 ## Additional testing
 
-Stress tested against all R files from 126 CRAN and base R packages
-with randomized style parameters: 0 parse failures, 0 idempotency
-exceptions.
+rformat's test suite covers idempotency and parse round-trip behaviour. The
+0.1.0 release was additionally stress-tested against all R files from 126 CRAN
+and base R packages with randomized style parameters (0 parse failures, 0
+idempotency exceptions).
+
+## Reverse dependencies
+
+None on CRAN.
