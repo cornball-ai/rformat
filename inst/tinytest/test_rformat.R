@@ -64,6 +64,22 @@ expect_false(
   info = "No blank line should separate collapsed signature from its bare body"
 )
 
+# Backend parity for #29: the pure-R fallback must also close the gap between
+# a collapsed signature and a bare (braceless) body, matching the C++ backend.
+src <- "foo <- function(alpha,\n                beta)\n  alpha + beta\n"
+r_out <- rformat:::format_pipeline(src, "  ", "fixed", FALSE, "kr",
+                                   80L, FALSE, FALSE, TRUE)
+expect_false(
+  grepl("function\\(alpha, beta\\)\\s*\\n\\s*\\n", r_out),
+  info = "R backend: no blank line between collapsed signature and bare body (#29)"
+)
+expect_equal(
+  rformat:::format_pipeline(r_out, "  ", "fixed", FALSE, "kr",
+                            80L, FALSE, FALSE, TRUE),
+  r_out,
+  info = "R backend: collapsed-signature bare body is idempotent (#29)"
+)
+
 # Nested parentheses collapse (regression test)
 # Short nested calls should collapse to a single line
 code <- "tryCatch(
